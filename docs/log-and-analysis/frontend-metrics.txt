@@ -1,0 +1,37 @@
+﻿Richieste (esclusi health check): 35
+
+Per stato HTTP:
+
+Name Count
+---- -----
+200     35
+
+
+Per percorso:
+
+Name Count
+---- -----
+/       35
+
+
+Latenza (ms):
+
+Count Average Minimum Maximum
+----- ------- ------- -------
+   35    61,1      23     515
+
+
+Mediana (ms): 32
+95 percentile (ms): 165
+
+5 richieste piu lente:
+
+timestamp                       ms path
+---------                       -- ----
+2026-10-22T09:55:57.815790151Z 515 /   
+2026-10-22T09:55:59.817429633Z 165 /   
+2026-10-22T10:23:46.686811093Z 141 /   
+2026-10-22T09:55:58.376791308Z 134 /   
+2026-10-22T09:56:00.566752773Z 107 /   
+
+

@@ -1,0 +1,76 @@
+﻿Name:             frontend-7b76f78b44-tjrlr
+Namespace:        development
+Priority:         0
+Service Account:  frontend
+Node:             desktop-control-plane/172.18.0.2
+Start Time:       Wed, 21 Oct 2026 07:18:30 +0200
+Labels:           app=frontend
+                  pod-template-hash=7b76f78b44
+Annotations:      sidecar.istio.io/rewriteAppHTTPProbers: true
+Status:           Running
+IP:               10.244.0.2
+IPs:
+  IP:           10.244.0.2
+Controlled By:  ReplicaSet/frontend-7b76f78b44
+Containers:
+  server:
+    Container ID:   containerd://183c87489001e741ddf58200f90a09fa77bf8f239b65656c43dca1398dd8c8ce
+    Image:          us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend:v0.10.5
+    Image ID:       us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend@sha256:50ca57c513de1ef22a97b6ef76989a73878d4a3873f85b5314bfc207853d5475
+    Port:           8080/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Wed, 21 Oct 2026 18:34:05 +0200
+    Last State:     Terminated
+      Reason:       Unknown
+      Exit Code:    255
+      Started:      Wed, 21 Oct 2026 07:18:32 +0200
+      Finished:     Wed, 21 Oct 2026 18:33:54 +0200
+    Ready:          True
+    Restart Count:  1
+    Limits:
+      cpu:     200m
+      memory:  128Mi
+    Requests:
+      cpu:      100m
+      memory:   64Mi
+    Liveness:   http-get http://:8080/_healthz delay=10s timeout=1s period=10s #success=1 #failure=3
+    Readiness:  http-get http://:8080/_healthz delay=10s timeout=1s period=10s #success=1 #failure=3
+    Environment:
+      PORT:                             8080
+      PRODUCT_CATALOG_SERVICE_ADDR:     productcatalogservice:3550
+      CURRENCY_SERVICE_ADDR:            currencyservice:7000
+      CART_SERVICE_ADDR:                cartservice:7070
+      RECOMMENDATION_SERVICE_ADDR:      recommendationservice:8080
+      SHIPPING_SERVICE_ADDR:            shippingservice:50051
+      CHECKOUT_SERVICE_ADDR:            checkoutservice:5050
+      AD_SERVICE_ADDR:                  adservice:9555
+      SHOPPING_ASSISTANT_SERVICE_ADDR:  shoppingassistantservice:80
+      ENABLE_PROFILER:                  0
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-8cwms (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-8cwms:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason          Age    From     Message
+  ----    ------          ----   ----     -------
+  Normal  SandboxChanged  5m22s  kubelet  Pod sandbox changed, it will be killed and re-created.
+  Normal  Pulled          5m20s  kubelet  spec.containers{server}: Container image "us-central1-docker.pkg.dev/google-samples/microservices-demo/frontend:v0.10.5" already present on machine and can be accessed by the pod
+  Normal  Created         5m20s  kubelet  spec.containers{server}: Container created
+  Normal  Started         5m18s  kubelet  spec.containers{server}: Container started

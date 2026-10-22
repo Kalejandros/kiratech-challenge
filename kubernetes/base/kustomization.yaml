@@ -1,0 +1,84 @@
+# Copyright 2022 Google LLC (struttura originale), modificato per la challenge
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Manifest upstream di Online Boutique (non modificati)
+  - adservice.yaml
+  - cartservice.yaml
+  - checkoutservice.yaml
+  - currencyservice.yaml
+  - emailservice.yaml
+  - frontend.yaml
+  # - loadgenerator.yaml   # escluso dal deploy
+  - paymentservice.yaml
+  - productcatalogservice.yaml
+  - recommendationservice.yaml
+  - shippingservice.yaml
+  # Risorse aggiunte per la challenge
+  - security-rbac.yaml
+  - ingress.yaml
+
+patches:
+  # Unico punto d'ingresso: l'Ingress. Il Service LoadBalancer upstream
+  # esporrebbe il frontend aggirandolo.
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: frontend-external
+
+  # Nessun servizio dell'applicazione usa l'API di Kubernetes:
+  # i pod non ricevono il token del ServiceAccount.
+  - target:
+      kind: ServiceAccount
+    patch: |-
+      - op: add
+        path: /automountServiceAccountToken
+        value: false
+
+  # Redis usa il proprio ServiceAccount invece di "default".
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: redis-cart
+      spec:
+        template:
+          spec:
+            serviceAccountName: redis-cart
+
+  # Redis richiede una password, letta dal Secret "redis-auth".
+  # Il Secret NON è nel repository: va creato in ogni namespace (vedi README).
+  - target:
+      kind: Deployment
+      name: redis-cart
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: redis-auth
+                key: REDIS_PASSWORD
+      - op: add
+        path: /spec/template/spec/containers/0/args
+        value: ["--requirepass", "$(REDIS_PASSWORD)"]
+
+  # Cartservice si autentica a Redis con la stessa password.
+  - target:
+      kind: Deployment
+      name: cartservice
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: redis-auth
+                key: REDIS_PASSWORD
+          - name: REDIS_ADDR
+            value: "redis-cart:6379,password=$(REDIS_PASSWORD)"

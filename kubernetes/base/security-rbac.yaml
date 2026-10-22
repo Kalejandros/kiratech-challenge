@@ -1,0 +1,45 @@
+# ServiceAccount dedicato a Redis (nel manifest upstream usa "default")
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis-cart
+---
+# Accesso di sola lettura per il supporto operativo L2:
+# stato di pod, log, eventi, servizi e deployment.
+# Esclusi: Secret, exec nei container, qualsiasi modifica o cancellazione.
+# In un cluster reale il RoleBinding punterebbe a un gruppo dell'identity provider;
+# qui si usa un ServiceAccount per poterlo verificare con "kubectl auth can-i".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: boutique-ops-viewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: boutique-ops-viewer
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints", "events", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: boutique-ops-viewer
+subjects:
+  - kind: ServiceAccount
+    name: boutique-ops-viewer
+roleRef:
+  kind: Role
+  name: boutique-ops-viewer
+  apiGroup: rbac.authorization.k8s.io

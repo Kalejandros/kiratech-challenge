@@ -1,0 +1,73 @@
+﻿Starting Redis Server
+1:C 21 Oct 2026 16:34:06.699 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+1:C 21 Oct 2026 16:34:06.699 * Redis version=8.10.2, bits=64, commit=00000000, modified=1, pid=1, just started
+1:C 21 Oct 2026 16:34:06.699 * Configuration loaded
+1:M 21 Oct 2026 16:34:06.774 * monotonic clock: POSIX clock_gettime
+1:M 21 Oct 2026 16:34:06.779 * Running mode=standalone, port=6379.
+1:M 21 Oct 2026 16:34:06.785 * <bf> RedisBloom version 8.10.1 (Git=unknown)
+1:M 21 Oct 2026 16:34:06.785 * <bf> Registering configuration options: [
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ bf-error-rate       :      0.01 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ bf-initial-size     :       100 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ bf-expansion-factor :         2 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ cf-bucket-size      :         2 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ cf-initial-size     :      1024 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ cf-max-iterations   :        20 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ cf-expansion-factor :         1 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> 	{ cf-max-expansions   :        32 }
+1:M 21 Oct 2026 16:34:06.785 * <bf> ]
+1:M 21 Oct 2026 16:34:06.786 * Module 'bf' loaded from /usr/local/lib/redis/modules//redisbloom.so
+1:M 21 Oct 2026 16:34:07.091 * <search> search-workers default: 12 (min of MAX_WORKER_THREADS=16 and CPU cores)
+1:M 21 Oct 2026 16:34:07.095 * <search> Redis version found by RedisSearch : 8.10.2 - oss
+1:M 21 Oct 2026 16:34:07.095 * <search> RediSearch version 8.10.1 (Git=)
+1:M 21 Oct 2026 16:34:07.097 * <search> gc: ON, prefix min length: 2, min word length to stem: 4, prefix max expansions: 200, query timeout (ms): 500, timeout policy: return, oom policy: return, cursor read size: 1000, cursor max idle (ms): 300000, max doctable size: 1000000, max number of search results:  1000000, default scorer: BM25STD, 
+1:M 21 Oct 2026 16:34:07.149 * <search> Initialized thread pools!
+1:M 21 Oct 2026 16:34:07.149 * <search> Enabled workers threadpool of size 12
+1:M 21 Oct 2026 16:34:07.177 * <search> Subscribe to config changes
+1:M 21 Oct 2026 16:34:07.177 * <search> Subscribe to cluster slot migration events
+1:M 21 Oct 2026 16:34:07.177 * <search> Subscribe to cluster topology change events
+1:M 21 Oct 2026 16:34:07.177 * <search> Enabled role change notification
+1:M 21 Oct 2026 16:34:07.178 * <search> Cluster configuration: AUTO partitions, type: 0, coordinator timeout: 0ms
+1:M 21 Oct 2026 16:34:07.180 * Module 'search' loaded from /usr/local/lib/redis/modules//redisearch.so
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> RedisTimeSeries version 81001, git_sha=
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> Redis version found by RedisTimeSeries : 8.10.2 - oss
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> Registering configuration options: [
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-compaction-policy   :              }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-num-threads         :            3 }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-libmr-protocol      :     INTERNAL }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-retention-policy    :            0 }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-duplicate-policy    :        block }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-chunk-size-bytes    :         4096 }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-encoding            :   compressed }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-ignore-max-time-diff:            0 }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-ignore-max-val-diff :     0.000000 }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> 	{ ts-topology-events     :         true }
+1:M 21 Oct 2026 16:34:07.185 * <timeseries> ]
+1:M 21 Oct 2026 16:34:07.186 * <timeseries> Detected redis oss (cluster-enabled=no)
+1:M 21 Oct 2026 16:34:07.188 * <timeseries> Subscribe to ASM events
+1:M 21 Oct 2026 16:34:07.188 * <timeseries> Subscribe to topology changes events
+1:M 21 Oct 2026 16:34:07.188 * <timeseries> Enabled diskless replication
+1:M 21 Oct 2026 16:34:07.188 * Module 'timeseries' loaded from /usr/local/lib/redis/modules//redistimeseries.so
+1:M 21 Oct 2026 16:34:07.286 * <ReJSON> Created new data type 'ReJSON-RL'
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> version: 81000 git sha: unknown branch: unknown
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V1 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V2 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V3 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V4 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V5 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V6 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V7 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Exported RedisJSON_V8 API
+1:M 21 Oct 2026 16:34:07.292 * <ReJSON> Enabled diskless replication
+1:M 21 Oct 2026 16:34:07.293 * <ReJSON> Initialized shared string cache, thread safe: true.
+1:M 21 Oct 2026 16:34:07.296 * Module 'ReJSON' loaded from /usr/local/lib/redis/modules//rejson.so
+1:M 21 Oct 2026 16:34:07.296 * <search> Acquired RedisJSON_V8 API
+1:M 21 Oct 2026 16:34:07.377 * Server initialized
+1:M 21 Oct 2026 16:34:07.381 * <search> LOAD start source=RDB_FILE sst=false disk=rebuild-from-keyspace
+1:M 21 Oct 2026 16:34:07.382 * Loading RDB produced by version 8.10.2
+1:M 21 Oct 2026 16:34:07.382 * RDB age 36934 seconds
+1:M 21 Oct 2026 16:34:07.382 * RDB memory usage when created 1.60 Mb
+1:M 21 Oct 2026 16:34:07.386 * Done loading RDB, keys loaded: 1, keys expired: 0.
+1:M 21 Oct 2026 16:34:07.387 * <search> LOAD end disk=rebuild-from-keyspace ok=true
+1:M 21 Oct 2026 16:34:07.387 * DB loaded from disk: 0.009 seconds
+1:M 21 Oct 2026 16:34:07.387 * Ready to accept connections tcp
+1:M 21 Oct 2026 16:34:07.387 # WARNING: Redis does not require authentication and is not protected by network restrictions. Redis will accept connections from any IP address on any network interface.
