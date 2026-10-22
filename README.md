@@ -82,7 +82,7 @@ Gli overlay non usano `namePrefix` (sezione 7, caso 3): dev e prod sono isolati 
 kubectl cluster-info
 kubectl get nodes
 ```
-Evidenze: `docs/screenshots/tests/dev/` (cluster-info, get-nodes).
+Evidenze: [`dev-cluster-info.png`](docs/screenshots/tests/dev/dev-cluster-info.png), [`dev-get-nodes.png`](docs/screenshots/tests/dev/dev-get-nodes.png).
 
 ### 4.2 Verifica del rendering dei manifest
 
@@ -113,7 +113,8 @@ kubectl get svc -n development
 kubectl get endpoints -n development
 ```
 Dopo circa uno o due minuti tutti gli 11 pod risultano in `1/1 Running`.
-Evidenze: `docs/screenshots/tests/dev/` (apply, pods, svc, endpoints).
+
+Evidenze: [`dev-get-pods.png`](docs/screenshots/tests/dev/dev-get-pods.png), [`dev-get-svc.png`](docs/screenshots/tests/dev/dev-get-svc.png), [`dev-get-endpoints.png`](docs/screenshots/tests/dev/dev-get-endpoints.png)
 
 ### 4.5 Accesso all'applicazione
 
@@ -127,7 +128,7 @@ kubectl port-forward svc/frontend 8080:80 -n development
 
 Poi aprire <http://localhost:8080>. Test end-to-end: aggiungere un prodotto al carrello e verificare la conversione di valuta da USD a EUR (attraversa frontend, catalogo, carrello, Redis e servizio valute).
 
-Evidenze: `docs/screenshots/tests/dev/` (ingress senza controller, home del negozio, carrello).
+Evidenze: [`dev-ingress-no-controller.png`](docs/screenshots/tests/dev/dev-ingress-no-controller.png), [`dev-home.png`](docs/screenshots/tests/dev/dev-home.png), [`dev-cart.png`](docs/screenshots/tests/dev/dev-cart.png).
 
 ### 4.6 Ambiente prod
 
@@ -163,7 +164,11 @@ Il log di `emailservice` conferma il passaggio dell'ordine nella catena dei serv
 kubectl logs deploy/emailservice -n production --tail=20
 ```
 
-Evidenze: `docs/screenshots/tests/prod/` (apply, pods, svc, home, carrello, checkout, log di emailservice).
+Evidenze:
+- [`prod-create-namespace.png`](docs/screenshots/tests/prod/prod-create-namespace.png), [`prod-kustomize-render.png`](docs/screenshots/tests/prod/prod-kustomize-render.png), [`prod-dry-run-server.png`](docs/screenshots/tests/prod/prod-dry-run-server.png): preparazione e dry-run
+- [`prod-apply.png`](docs/screenshots/tests/prod/prod-apply.png), [`prod-get-pods.png`](docs/screenshots/tests/prod/prod-get-pods.png), [`prod-get-svc.png`](docs/screenshots/tests/prod/prod-get-svc.png): deploy
+- [`prod-home.png`](docs/screenshots/tests/prod/prod-home.png), [`prod-cart.png`](docs/screenshots/tests/prod/prod-cart.png), [`prod-checkout.png`](docs/screenshots/tests/prod/prod-checkout.png): test end-to-end
+- [`prod-emailservice-logs.png`](docs/screenshots/tests/prod/prod-emailservice-logs.png): log di emailservice
 
 ## 5. Verifica: health check, log, metriche
 
@@ -176,7 +181,7 @@ Invoke-WebRequest http://localhost:8080/_healthz -UseBasicParsing
 Risposta attesa: `StatusCode 200`, contenuto `ok`. 
 Lo stesso endpoint è usato dalle probe di liveness e readiness del frontend; gli altri servizi usano probe gRPC native di Kubernetes.
 
-Evidenza: `docs/screenshots/tests/dev/dev-health-check.png`.
+Evidenza: [`dev-health-check.png`](docs/screenshots/tests/dev/dev-health-check.png).
 
 ### 5.2 Log
 
@@ -245,7 +250,8 @@ kubectl top pods -n production
 
 Risultati: i consumi sono molto inferiori ai limiti (per esempio frontend 6Mi su 128Mi) e la CPU usata (1-6m) è molto più bassa delle requests (100-200m), con traffico quasi nullo. In prod il frontend ha due repliche, come definito nell'overlay.
 
-Evidenze: `docs/screenshots/metriche/`.
+Evidenze: 
+[`apply.png`](docs/screenshots/metriche/apply.png) (installazione), [`pod-running.png`](docs/screenshots/metriche/pod-running.png) (pod in esecuzione), [`top-nodes.png`](docs/screenshots/metriche/top-nodes.png), [`dev-prod-top-pods.png`](docs/screenshots/metriche/dev-prod-top-pods.png), [`kustomize-render.png`](docs/screenshots/metriche/kustomize-render.png) (rendering con la patch)
 
 #### Metrica applicativa derivata dai log
 
@@ -267,8 +273,8 @@ In una prima esecuzione era stato registrato un massimo di 6871 ms; non è più 
 
 Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 9).
 
-Evidenza: `docs/screenshots/metriche/frontend-metrics.png`.
-
+Evidenza: 
+[`frontend-metrics.png`](docs/screenshots/metriche/frontend-metrics.png), output completo: [`frontend-metrics.txt`](docs/log-and-analysis/frontend-metrics.txt)
 
 ## 6. Update, rollout e rollback
 
