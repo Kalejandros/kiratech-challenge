@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +21,7 @@ jobs:
           - kubernetes/monitoring/metrics-server
     steps:
       - name: Checkout del repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Installazione di kubeconform
         run: |
