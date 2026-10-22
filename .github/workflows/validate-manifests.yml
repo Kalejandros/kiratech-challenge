@@ -1,0 +1,58 @@
+name: Validazione manifest
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - kubernetes/environments/dev
+          - kubernetes/environments/prod
+          - kubernetes/monitoring/metrics-server
+    steps:
+      - name: Checkout del repository
+        uses: actions/checkout@v4
+
+      - name: Installazione di kubeconform
+        run: |
+          curl -sSL -o kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+          kubeconform -v
+
+      - name: Rendering Kustomize
+        run: |
+          kubectl version --client
+          kubectl kustomize "${{ matrix.target }}" > rendered.yaml
+          echo "Risorse generate: $(grep -c '^kind:' rendered.yaml)"
+
+      - name: Validazione dello schema con kubeconform
+        run: kubeconform -strict -summary rendered.yaml
+
+      - name: Controllo - nessun Secret nei manifest
+        run: |
+          if grep -q '^kind: Secret' rendered.yaml; then
+            echo "::error::Trovata una risorsa Secret nei manifest: i Secret vanno creati fuori dal repository (README, sezione 8.2)"
+            exit 1
+          fi
+          echo "Nessun Secret nei manifest"
+
+      - name: Controllo - immagini con registry e tag espliciti
+        run: |
+          bad=$(grep -E '^\s*image:' rendered.yaml | grep -vE 'image: [^ ]+/[^ ]+:[^ ]+$|image: redis:alpine$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Immagini senza registry o tag esplicito (README, sezione 7, caso 1):"
+            echo "$bad"
+            exit 1
+          fi
+          echo "Tutte le immagini hanno registry e tag espliciti"
