@@ -225,7 +225,11 @@ Risultato: `starting server on :8080` nei log e `ok` dall'health check. I log co
 
 **Uso nel cluster.** Un pod con l'immagine locale e `imagePullPolicy: Never` resta in `ErrImageNeverPull`: il nodo del cluster di Docker Desktop (basato su kind) ha un archivio di immagini separato da quello di Docker sul PC. Per usare l'immagine nel cluster va pubblicata su un registry; un riferimento senza registry sarebbe comunque bloccato dalla pipeline (sezione 9).
 
-Evidenze: [`run-senza-env.png`](docs/screenshots/build/run-senza-env.png), [`run-nonroot.png`](docs/screenshots/build/run-nonroot.png), [`cluster-non-vede-immagine.png`](docs/screenshots/build/cluster-non-vede-immagine.png)
+Evidenze:
+- [`run-senza-env.png`](docs/screenshots/build/run-senza-env.png): avvio senza variabili d'ambiente
+- [`run-con-env.png`](docs/screenshots/build/run-con-env.png): immagine originale, health check `ok`, home `500`, utente `0` (root)
+- [`run-nonroot.png`](docs/screenshots/build/run-nonroot.png): immagine `nonroot`, utente `65532`, etichette OCI, health check `ok`
+- [`cluster-non-vede-immagine.png`](docs/screenshots/build/cluster-non-vede-immagine.png): `ErrImageNeverPull` nel cluster
 
 ## 5. Verifica: health check, log, metriche
 
