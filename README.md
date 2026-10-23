@@ -838,8 +838,8 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 
 | Documento | Contenuto |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Componenti, flussi HTTP/gRPC, diagramma, scelte e trade-off **[DA COMPLETARE]** |
-| `docs/runbook.md` | Procedure operative: verifica, troubleshooting, rollback **[DA COMPLETARE]** |
+| [`docs/architecture.md`](docs/architecture.md) | Componenti, flussi HTTP/gRPC, diagramma, scelte e trade-off |
+| [`docs/runbook.md`](docs/runbook.md) | Procedure operative: verifica, triage per sintomo, update, rollback, escalation |
 | `docs/krateo.md` | Valutazione di Krateo: golden path, parametri, benefici e rischi **[DA COMPLETARE]** |
 | [`ai-usage/ai-usage.md`](ai-usage/ai-usage.md) | Strumenti AI usati, casi concreti, output accettati e scartati, verifiche **[DA COMPLETARE]** |
 | [`docs/log-and-analysis/`](docs/log-and-analysis/) | Output completi di `kubectl logs` e `kubectl describe` citati nel README |
