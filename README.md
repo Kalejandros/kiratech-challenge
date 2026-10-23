@@ -16,8 +16,9 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 6. [Update, rollout e rollback](#6-update-rollout-e-rollback)
 7. [Troubleshooting: problemi incontrati](#7-troubleshooting-problemi-incontrati)
 8. [Sicurezza e configurazione](#8-sicurezza-e-configurazione)
-9. [Limiti noti e punti aperti](#9-limiti-noti-e-punti-aperti)
-10. [Documentazione di dettaglio](#10-documentazione-di-dettaglio)
+9. [Pipeline CI: validazione dei manifest](#9-pipeline-ci-validazione-dei-manifest)
+10. [Limiti noti e punti aperti](#10-limiti-noti-e-punti-aperti)
+11. [Documentazione di dettaglio](#11-documentazione-di-dettaglio)
 
 ---
 
@@ -35,14 +36,14 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 - due overlay, `dev` e `prod`, con namespace, immagini con registry e tag espliciti, repliche, limiti e configurazione per ambiente;
 - patch di sicurezza nella base: password per Redis da un Secret esterno al repository, token dei ServiceAccount disattivato, ServiceAccount dedicato a Redis, rimozione del Service LoadBalancer upstream;
 - risorse aggiunte: Ingress, ruolo RBAC di sola lettura per il supporto operativo;
-- metrics-server per le metriche di risorse, uno script per una metrica applicativa ricavata dai log, una pipeline di validazione dei manifest **[DA COMPLETARE]**.
+- metrics-server per le metriche di risorse, uno script per una metrica applicativa ricavata dai log, una pipeline di validazione dei manifest (sezione 9).
 
 ## 2. Struttura del repository
 
 ```text
 .
 ├── .github/workflows/
-│   └── validate-manifests.yml      Pipeline CI: validazione dei manifest [DA COMPLETARE]
+│   └── validate-manifests.yml      Pipeline CI: validazione dei manifest
 ├── kubernetes/
 │   ├── base/
 │   │   ├── <servizio>.yaml         Manifest upstream di Online Boutique (invariati)
@@ -271,7 +272,7 @@ Su 35 richieste alla home (`/`), tutte con stato `200`, la latenza è risultata 
 Le richieste più lente sono ravvicinate e la più lenta è la prima del gruppo: è coerente con l'apertura a freddo delle connessioni verso gli altri servizi(ipotesi, non verificata).
 In una prima esecuzione era stato registrato un massimo di 6871 ms; non è più ricostruibile perché la richiesta è uscita dalla finestra dei log analizzata, quindi la causa non è determinata.
 
-Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 9).
+Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 10).
 
 Evidenza: 
 [`frontend-metrics.png`](docs/screenshots/metriche/frontend-metrics.png), output completo: [`frontend-metrics.txt`](docs/log-and-analysis/frontend-metrics.txt)
@@ -666,11 +667,60 @@ Stesse modifiche applicate a prod, con una password diversa (`redis-password-pro
 
 Evidenza: [`prod-verifica-sicurezza.png`](docs/screenshots/security/prod-verifica-sicurezza.png)
 
-## 9. Limiti noti e punti aperti
+## 9. Pipeline CI: validazione dei manifest
+
+Il workflow GitHub Actions [`.github/workflows/validate-manifests.yml`](.github/workflows/validate-manifests.yml) valida i manifest a ogni modifica, prima che vengano applicati al cluster.
+
+### 9.1 Cosa controlla
+
+Per ognuno dei tre target (`kubernetes/environments/dev`, `kubernetes/environments/prod`, `kubernetes/monitoring/metrics-server`), in parallelo:
+
+| Passo | Cosa verifica | Esempio di errore bloccato |
+|---|---|---|
+| Rendering Kustomize | Base, patch e overlay producono manifest | Patch su un percorso inesistente, file citato ma cancellato |
+| kubeconform (`-strict`) | Ogni risorsa rispetta lo schema di Kubernetes | Campo scritto male, tipo sbagliato, `apiVersion` inesistente |
+| Nessun Secret nei manifest | Il rendering non contiene risorse `kind: Secret` | Password reinserita nel repository (sezione 8.2) |
+| Immagini con registry e tag | Ogni immagine ha registry e tag espliciti (eccezione: `redis:alpine`, immagine ufficiale di Docker Hub) | Immagine nella forma breve dei manifest upstream (sezione 7, caso 1) |
+
+Gli ultimi due controlli trasformano in regole automatiche due problemi emersi durante il lavoro.
+
+### 9.2 Quando parte
+
+- a ogni push su `main`;
+- a ogni pull request;
+- a mano dalla scheda Actions (`workflow_dispatch`).
+
+La pipeline valida i file presenti nel repository: non accede al cluster e non esegue il deploy, perché il cluster di test è locale e non raggiungibile da GitHub.
+
+### 9.3 Scelte
+
+- **Versioni fissate:** runner `ubuntu-24.04` (non `ubuntu-latest`, che cambia nel tempo), kubeconform `v0.6.7`, `actions/checkout@v5`. Lo stesso commit produce lo stesso risultato anche a distanza di tempo.
+- **Permessi minimi:** `permissions: contents: read`, il workflow può solo leggere il repository.
+- **`fail-fast: false`:** un errore in un ambiente non interrompe la validazione degli altri, così l'esito mostra tutti i problemi in una sola esecuzione.
+
+### 9.4 Prova: pull request con un errore
+
+Su un branch di prova è stata rimossa la riga `newName` del frontend nell'overlay di dev, riproducendo il caso 1 della sezione 7 (immagine `frontend:v0.10.5` senza registry). Nella pull request #1:
+- il job di dev fallisce al controllo delle immagini, con il messaggio `Immagini senza registry o tag esplicito` e la riga `image: frontend:v0.10.5`;
+- i job di prod e metrics-server passano: i controlli sono separati per ambiente;
+- la validazione dello schema con kubeconform **passa**: per lo schema di Kubernetes il valore è corretto, l'errore emergerebbe solo al pull dell'immagine. Il controllo specifico è quindi necessario.
+
+La pull request è stata chiusa senza merge: `main` non è cambiato.
+
+Evidenze: [`pipeline-verde.png`](docs/screenshots/ci/pipeline-verde.png), [`pr-rossa.png`](docs/screenshots/ci/pr-rossa.png)
+
+### 9.5 Cosa non controlla
+
+- **L'esistenza dei tag nel registry:** il tag inesistente `v0.10.99` (sezione 6.3) supererebbe tutti i controlli.
+- **Gli errori logici di configurazione:** con `namePrefix` (sezione 7, caso 3) i manifest erano validi, ma l'applicazione non funzionava.
+
+Evoluzione: verifica dei tag nel registry e deploy di prova su un cluster temporaneo (kind) all'interno della pipeline, con un test HTTP sul frontend. Avrebbe intercettato entrambi i casi.
+
+## 10. Limiti noti e punti aperti
 
 Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti derivano dall'ambiente locale (Docker Desktop, nodo singolo) e non si presenterebbero su un cluster gestito.
 
-### 9.1 Ambiente ed esposizione
+### 10.1 Ambiente ed esposizione
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
@@ -679,7 +729,7 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Accesso tramite `kubectl port-forward` | Si aggancia a un singolo pod e si interrompe quando il pod viene sostituito (osservato dopo update e restart); adatto solo ai test | Ingress funzionante |
 | metrics-server con `--kubelet-insecure-tls` | Verifica dei certificati dei kubelet disattivata (sezione 7, caso 5) | Certificati dei kubelet firmati dalla CA del cluster |
 
-### 9.2 Sicurezza
+### 10.2 Sicurezza
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
@@ -691,13 +741,13 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Immagini upstream referenziate per tag, non per digest, e non scansionate | Un tag può essere ripubblicato con contenuto diverso; vulnerabilità delle immagini non note | Riferimento per digest e scansione in pipeline (es. Trivy) |
 | Pod Security Admission non configurato sui namespace | Nessun controllo automatico sui `securityContext` dei pod creati in futuro | Label `pod-security.kubernetes.io` sui namespace (in `warn` prima di `enforce`: i manifest upstream non definiscono `seccompProfile`, richiesto dal profilo `restricted`) |
 
-### 9.3 Dati
+### 10.3 Dati
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
 | Redis con volume `emptyDir` | I carrelli si perdono a ogni riavvio del pod di Redis (osservato dopo ogni modifica di Redis) | StatefulSet con PersistentVolumeClaim, oppure servizio gestito (es. Azure Cache for Redis, Memorystore) |
 
-### 9.4 Osservabilità
+### 10.4 Osservabilità
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
@@ -705,23 +755,24 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Latenza massima di 6871 ms in una prima misurazione | Causa non determinata: la richiesta è uscita dalla finestra dei log | Metriche persistenti che conservino lo storico |
 | Riavvio del frontend con `SandboxChanged` (exit code 255) | Causa non verificata; ipotesi: riavvio del runtime locale | Raccolta centralizzata di log ed eventi |
 
-### 9.5 Automazione e gestione
+### 10.5 Automazione e gestione
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
 | Namespace creati a mano, non inclusi nei manifest | Passo manuale nell'installazione | Namespace gestiti da GitOps o dalla piattaforma (es. Krateo) |
 | Deploy con `kubectl apply` manuale | Nessuna rimozione automatica delle risorse tolte dai file (sezione 8.7) | Argo CD o Flux con prune |
-| Pipeline CI **[DA COMPLETARE]** | — | Validazione dei manifest a ogni commit |
+| Pipeline solo di validazione | Non verifica l'esistenza dei tag né il funzionamento dell'applicazione (sezione 9.5) | Deploy di prova su kind nella pipeline |
 | Nessuna build di immagini proprie **[DA COMPLETARE]** | Si usano solo immagini upstream | Dockerfile e build di almeno un servizio |
 | `kubectl diff` non disponibile nell'ambiente di test | Verifica pre-apply fatta sul rendering di `kubectl kustomize` (sezione 6.5) | `diff` nel PATH (es. Git for Windows) |
 | History dei rollout senza `CHANGE-CAUSE` | Revisioni poco leggibili | Annotazione `kubernetes.io/change-cause` |
 
-### 9.6 Applicazione
+### 10.6 Applicazione
 
 - Il `loadgenerator` non è incluso nel deploy: il traffico di test è generato manualmente (browser e `Invoke-WebRequest`).
 - Il frontend ha la variabile `SHOPPING_ASSISTANT_SERVICE_ADDR` verso un servizio non installato: la funzione assistente è disattivata di default e non ha effetti.
 
-## 10. Documentazione di dettaglio
+
+## 11. Documentazione di dettaglio
 
 | Documento | Contenuto |
 |---|---|
