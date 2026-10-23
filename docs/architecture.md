@@ -129,7 +129,7 @@ Un guasto di uno qualsiasi di questi servizi fa fallire l'ordine: il checkout è
 | ConfigMap e Secret | ConfigMap `frontend-config` generata per ambiente (solo dev), Secret `redis-auth` creato fuori dal repository |
 | CI/CD | GitHub Actions: validazione dei manifest a ogni commit; deploy manuale con `kubectl apply -k` |
 | Monitoring e logging | Probe di liveness e readiness, log JSON strutturati, metrics-server, metrica di latenza ricavata dai log |
-| Krateo | Valutato in `docs/krateo.md` **[DA COMPLETARE]** |
+| Krateo | Valutato in `docs/krateo.md` |
 
 ## 6. Deployment con Kustomize
 
