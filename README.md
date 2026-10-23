@@ -223,6 +223,8 @@ docker rm -f frontend-nonroot
 
 Risultato: `starting server on :8080` nei log e `ok` dall'health check. I log contengono due righe di errore sul metadata server `169.254.169.254`: all'avvio il frontend prova a leggere nome del cluster e zona dal metadata server di Google Cloud, che fuori da GCP non esiste. Sono innocue: il server prosegue con quei campi vuoti.
 
+La home restituisce invece `500`: per costruire la pagina il frontend interroga il catalogo prodotti, che fuori dal cluster non esiste. `/_healthz` verifica solo che il processo risponda, non che le dipendenze siano raggiungibili: è lo stesso limite osservato nel caso 3 della sezione 7, dove i pod erano sani ma l'applicazione restituiva errori.
+
 **Uso nel cluster.** Un pod con l'immagine locale e `imagePullPolicy: Never` resta in `ErrImageNeverPull`: il nodo del cluster di Docker Desktop (basato su kind) ha un archivio di immagini separato da quello di Docker sul PC. Per usare l'immagine nel cluster va pubblicata su un registry; un riferimento senza registry sarebbe comunque bloccato dalla pipeline (sezione 9).
 
 Evidenze:
