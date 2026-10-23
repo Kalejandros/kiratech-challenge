@@ -12,6 +12,7 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 2. [Struttura del repository](#2-struttura-del-repository)
 3. [Prerequisiti](#3-prerequisiti)
 4. [Installazione e test](#4-installazione-e-test-ambiente-dev)
+   - [Build dell'immagine del frontend](#47-build-dellimmagine-del-frontend)
 5. [Verifica: health check, log, metriche](#5-verifica-health-check-log-metriche)
 6. [Update, rollout e rollback](#6-update-rollout-e-rollback)
 7. [Troubleshooting: problemi incontrati](#7-troubleshooting-problemi-incontrati)
@@ -30,13 +31,14 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 
 **Perché:** è l'applicazione consigliata dalla traccia ed è adatta a una prova L2: è multi-servizio, nasce per Kubernetes, ha dipendenze reali tra i servizi (il checkout ne chiama sei), un componente stateful (Redis), health check nativi e log strutturati. Permette quindi di esercitare deploy, networking, configurazione, sicurezza e troubleshooting su un caso realistico.
 
-**Parti usate:** i manifest Kubernetes della cartella `kubernetes-manifests/` del repository originale, copiati in `kubernetes/base/` senza modifiche, con le immagini ufficiali pubblicate da Google (versione `v0.10.5`). Il `loadgenerator` non è incluso nel deploy. Il codice sorgente dei servizi non è incluso nel repository.
+**Parti usate:** i manifest Kubernetes della cartella `kubernetes-manifests/` del repository originale, copiati in `kubernetes/base/` senza modifiche, con le immagini ufficiali pubblicate da Google (versione `v0.10.5`). Il `loadgenerator` non è incluso nel deploy. Del codice sorgente è incluso solo quello del frontend (`src/frontend/`, invariato tranne il Dockerfile), usato per la build dell'immagine (sezione 4.7).
 
 **Modifiche rispetto all'originale** (tutte tramite Kustomize, i manifest upstream restano invariati):
 - due overlay, `dev` e `prod`, con namespace, immagini con registry e tag espliciti, repliche, limiti e configurazione per ambiente;
 - patch di sicurezza nella base: password per Redis da un Secret esterno al repository, token dei ServiceAccount disattivato, ServiceAccount dedicato a Redis, rimozione del Service LoadBalancer upstream;
 - risorse aggiunte: Ingress, ruolo RBAC di sola lettura per il supporto operativo;
-- metrics-server per le metriche di risorse, uno script per una metrica applicativa ricavata dai log, una pipeline di validazione dei manifest (sezione 9).
+- metrics-server per le metriche di risorse, uno script per una metrica applicativa ricavata dai log, una pipeline di validazione dei manifest (sezione 9);
+- Dockerfile del frontend con immagine di base non root e fissata per digest (sezione 4.7).
 
 ## 2. Struttura del repository
 
@@ -57,6 +59,8 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 │       └── metrics-server/         metrics-server v0.9.0 + patch per il cluster locale
 ├── scripts/
 │   └── frontend-metrics.ps1        Metrica applicativa ricavata dai log del frontend
+├── src/
+│   └── frontend/                   Codice del frontend (upstream v0.10.5) con Dockerfile modificato
 ├── docs/
 │   ├── architecture.md             Documento architetturale
 │   ├── log-and-analysis/           Output completi di log e describe
@@ -75,6 +79,7 @@ Gli overlay non usano `namePrefix` (sezione 7, caso 3): dev e prod sono isolati 
 - **Accesso di rete in uscita** sulla porta 443 verso `us-central1-docker.pkg.dev` (immagini di Online Boutique) e Docker Hub (`redis:alpine`).
 - **Permessi di amministratore sul cluster**, non sul PC: servono per creare namespace, Secret e risorse RBAC e per le verifiche con `kubectl auth can-i --as`. Docker Desktop li concede di default all'utente locale.
 - **Git** facoltativo: in alternativa si scarica il repository come ZIP da GitHub.
+- **Per la build dell'immagine** (sezione 4.7): accesso a Docker Hub, `gcr.io` e `proxy.golang.org` (dipendenze Go).
 
 ## 4. Installazione e test (ambiente dev)
 
@@ -170,6 +175,57 @@ Evidenze:
 - [`prod-apply.png`](docs/screenshots/tests/prod/prod-apply.png), [`prod-get-pods.png`](docs/screenshots/tests/prod/prod-get-pods.png), [`prod-get-svc.png`](docs/screenshots/tests/prod/prod-get-svc.png): deploy
 - [`prod-home.png`](docs/screenshots/tests/prod/prod-home.png), [`prod-cart.png`](docs/screenshots/tests/prod/prod-cart.png), [`prod-checkout.png`](docs/screenshots/tests/prod/prod-checkout.png): test end-to-end
 - [`prod-emailservice-logs.png`](docs/screenshots/tests/prod/prod-emailservice-logs.png): log di emailservice
+
+### 4.7 Build dell'immagine del frontend
+
+Il cluster usa le immagini ufficiali pubblicate da Google. Per la build, il codice del frontend è stato copiato dal repository originale alla stessa versione (`v0.10.5`, scaricata per tag e non dal ramo principale) in `src/frontend/`. Il codice è invariato; l'unico file modificato è il Dockerfile.
+
+**Il Dockerfile è multi-stage:**
+- **stadio `builder`**: parte da `golang:1.25.6-alpine` fissata per digest, scarica le dipendenze (`go mod download`) **prima** di copiare il codice, così lo strato delle dipendenze resta in cache se cambia solo il codice, e compila un binario statico (`CGO_ENABLED=0`, `-ldflags="-s -w"`);
+- **stadio finale**: immagine *distroless*, senza shell né gestore di pacchetti, in cui vengono copiati solo il binario, i template HTML e i file statici. Il compilatore non finisce nell'immagine finale.
+
+**Modifiche rispetto al Dockerfile upstream:**
+
+| | Upstream | Questo repository |
+|---|---|---|
+| Immagine finale | `gcr.io/distroless/static`, senza digest | `gcr.io/distroless/static:nonroot@sha256:d6206787...`, fissata per digest |
+| Utente predefinito | `0` (root) | `65532` (`nonroot`) |
+| Metadati | — | Etichette OCI: sorgente, versione, descrizione |
+
+Nel cluster il container gira comunque come utente 1000 (`runAsUser` nel manifest); l'immagine `nonroot` rende sicura anche l'esecuzione fuori da Kubernetes. Il digest fissa l'immagine di base byte per byte: gli aggiornamenti di sicurezza vanno quindi applicati aggiornando il digest in modo esplicito (es. con Dependabot o Renovate).
+
+**Build e verifica:**
+
+```powershell
+docker build -t boutique-frontend:v0.10.5-nonroot src\frontend
+docker images boutique-frontend
+docker inspect --format "{{.Config.User}}" boutique-frontend:v0.10.5-nonroot
+docker inspect --format "{{json .Config.Labels}}" boutique-frontend:v0.10.5-nonroot
+```
+
+- Immagine finale: **12 MB** compressi (circa 41 MB su disco), contro i circa 60 MB del solo stadio di compilazione.
+- Prima build 83 secondi; la seconda 25 secondi, perché `go mod download` è stato riutilizzato dalla cache. La compilazione è stata rifatta perché `COPY . .` include anche il Dockerfile, appena modificato: aggiungere `Dockerfile` al `.dockerignore` eviterebbe di invalidare quello strato.
+- Utente `65532` ed etichette OCI presenti.
+
+**Configurazione tramite variabili d'ambiente.** L'immagine non contiene indirizzi né configurazione: arrivano a runtime, nel cluster dal manifest. Senza variabili il frontend si rifiuta di partire e indica quale manca:
+
+```powershell
+docker run --name frontend-test boutique-frontend:v0.10.5-nonroot
+```
+
+Risultato: `panic: environment variable "PRODUCT_CATALOG_SERVICE_ADDR" not set`. Con le stesse variabili del manifest il server parte e l'health check risponde:
+
+```powershell
+docker run -d --name frontend-nonroot -p 9090:8080 -e PORT=8080 -e PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550 -e CURRENCY_SERVICE_ADDR=currencyservice:7000 -e CART_SERVICE_ADDR=cartservice:7070 -e RECOMMENDATION_SERVICE_ADDR=recommendationservice:8080 -e SHIPPING_SERVICE_ADDR=shippingservice:50051 -e CHECKOUT_SERVICE_ADDR=checkoutservice:5050 -e AD_SERVICE_ADDR=adservice:9555 -e SHOPPING_ASSISTANT_SERVICE_ADDR=shoppingassistantservice:80 boutique-frontend:v0.10.5-nonroot
+(Invoke-WebRequest http://localhost:9090/_healthz -UseBasicParsing).Content
+docker rm -f frontend-nonroot
+```
+
+Risultato: `starting server on :8080` nei log e `ok` dall'health check. I log contengono due righe di errore sul metadata server `169.254.169.254`: all'avvio il frontend prova a leggere nome del cluster e zona dal metadata server di Google Cloud, che fuori da GCP non esiste. Sono innocue: il server prosegue con quei campi vuoti.
+
+**Uso nel cluster.** Un pod con l'immagine locale e `imagePullPolicy: Never` resta in `ErrImageNeverPull`: il nodo del cluster di Docker Desktop (basato su kind) ha un archivio di immagini separato da quello di Docker sul PC. Per usare l'immagine nel cluster va pubblicata su un registry; un riferimento senza registry sarebbe comunque bloccato dalla pipeline (sezione 9).
+
+Evidenze: [`run-senza-env.png`](docs/screenshots/build/run-senza-env.png), [`run-nonroot.png`](docs/screenshots/build/run-nonroot.png), [`cluster-non-vede-immagine.png`](docs/screenshots/build/cluster-non-vede-immagine.png)
 
 ## 5. Verifica: health check, log, metriche
 
@@ -705,7 +761,7 @@ Su un branch di prova è stata rimossa la riga `newName` del frontend nell'overl
 - i job di prod e metrics-server passano: i controlli sono separati per ambiente;
 - la validazione dello schema con kubeconform **passa**: per lo schema di Kubernetes il valore è corretto, l'errore emergerebbe solo al pull dell'immagine. Il controllo specifico è quindi necessario.
 
-La pull request è stata chiusa senza merge: `main` non è cambiato.
+La pull request è stata chiusa senza merge. In un primo tentativo la stessa modifica era stata applicata per errore direttamente su `main` (esecuzione #3, fallita) e subito annullata (esecuzione #4, verde): anche in quel caso la pipeline ha segnalato il problema al primo commit. La prova è stata poi ripetuta correttamente su un branch separato con pull request.
 
 Evidenze: [`pipeline-verde.png`](docs/screenshots/ci/pipeline-verde.png), [`pr-rossa.png`](docs/screenshots/ci/pr-rossa.png)
 
@@ -762,7 +818,7 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Namespace creati a mano, non inclusi nei manifest | Passo manuale nell'installazione | Namespace gestiti da GitOps o dalla piattaforma (es. Krateo) |
 | Deploy con `kubectl apply` manuale | Nessuna rimozione automatica delle risorse tolte dai file (sezione 8.7) | Argo CD o Flux con prune |
 | Pipeline solo di validazione | Non verifica l'esistenza dei tag né il funzionamento dell'applicazione (sezione 9.5) | Deploy di prova su kind nella pipeline |
-| Nessuna build di immagini proprie **[DA COMPLETARE]** | Si usano solo immagini upstream | Dockerfile e build di almeno un servizio |
+| Immagine del frontend costruita solo in locale | Il cluster continua a usare l'immagine ufficiale: il nodo non vede le immagini locali (sezione 4.7) | Build e pubblicazione su un registry (es. GitHub Container Registry) dalla pipeline |
 | `kubectl diff` non disponibile nell'ambiente di test | Verifica pre-apply fatta sul rendering di `kubectl kustomize` (sezione 6.5) | `diff` nel PATH (es. Git for Windows) |
 | History dei rollout senza `CHANGE-CAUSE` | Revisioni poco leggibili | Annotazione `kubernetes.io/change-cause` |
 
