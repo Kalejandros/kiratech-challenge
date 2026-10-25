@@ -68,6 +68,8 @@ README, architettura, runbook e valutazione di Krateo sono stati redatti con il 
 | Patch di sicurezza, pipeline, `configMapGenerator`, Dockerfile `nonroot` | **Accettati dopo verifica** | Rendering, apply, test funzionali, pipeline verde e rossa |
 | Installazione di ingress-nginx proposta come evoluzione dell'Ingress | **Scartato** | Verifica dello stato del progetto prima dell'installazione: ritirato da Kubernetes a marzo 2026; sostituito da Traefik |
 | Immagine di Traefik scritta senza registry (`traefik:v3.7.11`) | **Corretto** | Revisione del manifest: sarebbe stata bloccata dal controllo della pipeline; sostituita con `docker.io/library/traefik:v3.7.16` |
+| Helm v3.16.2 proposto per installare il chart | **Corretto** | Verifica prima del download: Helm 3 è a fine vita e la 3.16 era superata; usato Helm 4.2.4, verificato con l'hash SHA256 |
+| Comandi con segnaposto tra `<` e `>` (es. `--version <VERSIONE>`) | **Corretto** | In PowerShell `<` è un operatore riservato e il comando falliva; i comandi sono stati forniti già completi |
 
 ## 5. Caso principale: le immagini "bloccate dalla rete"
 
