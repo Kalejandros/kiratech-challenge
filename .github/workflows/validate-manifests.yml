@@ -19,6 +19,7 @@ jobs:
           - kubernetes/environments/dev
           - kubernetes/environments/prod
           - kubernetes/monitoring/metrics-server
+          - kubernetes/ingress/traefik
     steps:
       - name: Checkout del repository
         uses: actions/checkout@v5
