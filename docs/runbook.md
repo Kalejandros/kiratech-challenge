@@ -33,6 +33,7 @@ Da eseguire all'apertura di una segnalazione e dopo ogni intervento.
 | 7 | Nel browser: aggiungere un prodotto al carrello e completare il checkout | Pagina "Your order is complete!" | Errore 500: sezione 2.7 |
 | 8 | `kubectl get ingress -n development` | Classe `traefik`, host `dev.boutique.localhost`, `ADDRESS` valorizzato | Sezione 2.11 |
 | 9 | `curl.exe -s -o NUL -w "%{http_code}" -H "Host: dev.boutique.localhost" http://localhost:8082/` (con il port-forward verso Traefik) | `200` | Sezione 2.11 |
+| 10 | Prometheus <http://localhost:9090/alerts> o Alertmanager <http://localhost:9093> (port-forward: README, sezione 5.5) | Solo `Watchdog` attivo | Un allarme `BoutiqueFrontendDown` indica in quale namespace il frontend non ha repliche: sezioni 2.1-2.5 |
 
 Il passo 6 verifica solo che il processo del frontend sia vivo; il passo 7 verifica l'intera catena di servizi. **Un health check verde non garantisce che l'applicazione funzioni.**
 
@@ -65,6 +66,7 @@ Il nodo non riesce a scaricare l'immagine. Il messaggio dell'evento distingue tr
 | `pull access denied`, `repository does not exist` | Nome dell'immagine sbagliato o senza registry: risolto su Docker Hub | Controllare `image:` nel rendering (`kubectl kustomize ... \| Select-String "image:"`) e il blocco `images:` dell'overlay |
 | `code = NotFound ... not found` | Registry raggiunto, tag inesistente | Verificare il tag pubblicato nel registry; correggere `newTag` |
 | Timeout, `dial tcp`, `i/o timeout` | Problema di rete verso il registry | ``Test-NetConnection <registry> -Port 443``; verificare proxy o firewall |
+| `short read`, `unexpected EOF` | Download interrotto durante il trasferimento (rete instabile) | Attendere i tentativi automatici del kubelet; se persiste, verificare il download dal PC (`docker pull`) e valutare un registry alternativo (caso reale: README, sezione 7, caso 6) |
 
 Durante un rollout il pod vecchio resta attivo e il servizio non si interrompe: correggere con calma o fare rollback (sezione 3.2). Casi reali: README, sezione 6.3 e sezione 7, casi 1 e 2.
 

@@ -131,7 +131,7 @@ Un guasto di uno qualsiasi di questi servizi fa fallire l'ordine: il checkout è
 | Database / cache / broker | Redis (`redis-cart`) per i carrelli; nessun message broker |
 | ConfigMap e Secret | ConfigMap `frontend-config` generata per ambiente (solo dev), Secret `redis-auth` creato fuori dal repository |
 | CI/CD | GitHub Actions: validazione dei manifest a ogni commit; deploy manuale con `kubectl apply -k` |
-| Monitoring e logging | Probe di liveness e readiness, log JSON strutturati, metrics-server, metrica di latenza ricavata dai log |
+| Monitoring e logging | Probe di liveness e readiness, log JSON strutturati, metrics-server, Prometheus e Grafana (kube-prometheus-stack), allarme `BoutiqueFrontendDown` in Alertmanager |
 | Krateo | Valutato in `docs/krateo.md` |
 
 ## 6. Deployment con Kustomize
@@ -175,8 +175,10 @@ Dettagli e verifiche nella sezione 8 del README.
 | Log | Log JSON strutturati del frontend e degli altri servizi | Richieste, stato HTTP, latenza (`http.resp.took_ms`) |
 | Risorse | metrics-server, `kubectl top` | CPU e memoria di nodo e pod, da confrontare con requests e limits |
 | Metrica applicativa | Script `frontend-metrics.ps1` sui log | Richieste per stato, latenza mediana e 95° percentile |
+| Metriche nel tempo | Prometheus (namespace `monitoring`), dashboard Grafana | CPU e memoria per pod e namespace, stato di Deployment e repliche, con 2 giorni di storico |
+| Allarmi | `PrometheusRule` nel repository, Alertmanager | `BoutiqueFrontendDown`: frontend senza repliche disponibili da 1 minuto, in dev o in prod |
 
-Evoluzione prevista: Prometheus e Grafana **[DA COMPLETARE]**.
+Installazione, dashboard e prova dell'allarme: README, sezione 5.5. Evoluzione: notifiche reali da Alertmanager, sonda HTTP con blackbox-exporter, tracciamento con OpenTelemetry.
 
 ## 9. Scelte e trade-off
 
@@ -197,5 +199,5 @@ Evoluzione prevista: Prometheus e Grafana **[DA COMPLETARE]**.
 - **Segreti:** External Secrets Operator con un vault, per esempio Azure Key Vault.
 - **Dati:** Redis persistente o gestito.
 - **Rilascio:** GitOps con Argo CD o Flux, con prune delle risorse rimosse.
-- **Osservabilità:** Prometheus, Grafana e tracciamento con OpenTelemetry (il frontend ha già il tracing, disattivato).
+- **Osservabilità:** notifiche da Alertmanager (email, Teams), sonde HTTP con blackbox-exporter, tracciamento con OpenTelemetry (il frontend ha già il tracing, disattivato), Prometheus con storage persistente.
 - **Piattaforma:** esposizione come servizio self-service con Krateo (`docs/krateo.md`).
