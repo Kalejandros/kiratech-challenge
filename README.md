@@ -50,8 +50,8 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 │   ├── base/
 │   │   ├── <servizio>.yaml         Manifest upstream di Online Boutique (invariati)
 │   │   ├── security-rbac.yaml      ServiceAccount di Redis, ruolo di sola lettura per il supporto L2
-│   │   ├── ingress.yaml            Ingress (classe nginx)
-│   │   └── kustomization.yaml      Elenco delle risorse e patch di sicurezza
+│   ├── ingress/
+│   │   └── traefik/                Ingress controller Traefik v3.7.16 (namespace, RBAC, Deployment, Service)│   │   └── kustomization.yaml      Elenco delle risorse e patch di sicurezza
 │   ├── environments/
 │   │   ├── dev/                    Overlay dev: namespace development, immagini, banner di ambiente
 │   │   └── prod/                   Overlay prod: namespace production, 2 repliche del frontend, limiti di memoria
@@ -122,19 +122,67 @@ Dopo circa uno o due minuti tutti gli 11 pod risultano in `1/1 Running`.
 
 Evidenze: [`dev-get-pods.png`](docs/screenshots/tests/dev/dev-get-pods.png), [`dev-get-svc.png`](docs/screenshots/tests/dev/dev-get-svc.png), [`dev-get-endpoints.png`](docs/screenshots/tests/dev/dev-get-endpoints.png)
 
-### 4.5 Accesso all'applicazione
+### 4.5 Ingress e accesso all'applicazione
 
-L'Ingress `boutique-ingress` dichiara la classe `nginx`, ma nel cluster non è installato alcun ingress controller: `kubectl get ingressclass` non restituisce risorse, non ci sono pod di ingress in nessun namespace e l'Ingress non ha un indirizzo assegnato (colonna `ADDRESS` vuota). L'oggetto è quindi accettato ma non instrada traffico.
+**Situazione iniziale.** L'Ingress `boutique-ingress` dichiarava la classe `nginx`, ma nel cluster non c'era alcun ingress controller: `kubectl get ingressclass` non restituiva risorse, non c'erano pod di ingress in nessun namespace e la colonna `ADDRESS` dell'Ingress era vuota. L'oggetto era accettato dall'API ma non instradava traffico. 
+Evidenza: [dev-ingress-no-controller.png](docs/screenshots/tests/dev/dev-ingress-no-controller.png).
 
-Il Service `frontend` è di tipo ClusterIP, raggiungibile solo dall'interno del cluster. Per i test si usa quindi il port-forward, da lasciare aperto in una finestra dedicata:
+**Scelta del controller.** Non ho installato ingress-nginx perché il progetto è stato ritirato a marzo 2026 e non riceve più aggiornamenti né correzioni di sicurezza ([annuncio ufficiale di Kubernetes](https://www.kubernetes.io/blog/2026/01/29/ingress-nginx-statement/)). Ho scelto **Traefik**, mantenuto e compatibile con l'Ingress standard. L'immagine è fissata per versione e con registry esplicito (`docker.io/library/traefik:v3.7.16`): installato inizialmente alla v3.7.11, è stato aggiornato alla v3.7.16 dopo che il log di avvio ne aveva segnalato il rilascio. Il controllo automatico delle nuove versioni è poi stato disattivato (`--global.checknewversion=false`) per evitare connessioni verso l'esterno: gli aggiornamenti vanno quindi verificati e applicati a mano. I manifest di Traefik sono validati dalla pipeline (sezione 9).
+
+**Installazione.** I manifest sono in `kubernetes/ingress/traefik/`, senza dipendenze da Helm:
+
+| Risorsa | Scopo |
+|---|---|
+| Namespace `traefik` | Il controller è separato dalle applicazioni |
+| ServiceAccount, ClusterRole, ClusterRoleBinding | Sola lettura su Ingress, IngressClass, Service, EndpointSlice, Secret e nodi di tutti i namespace, più l'aggiornamento dello stato degli Ingress (vedi limiti nella sezione 10.2). Il token del ServiceAccount resta montato: a differenza dei servizi di Online Boutique (sezione 8.3), Traefik deve leggere le risorse dall'API di Kubernetes |
+| IngressClass `traefik` | Associa gli Ingress con `ingressClassName: traefik` a questo controller |
+| Deployment | Un solo provider (Ingress), entrypoint `web` sulla porta 8000, `/ping` per le probe, access log in JSON; esegue come non-root, con filesystem in sola lettura e senza capability |
+| Service `LoadBalancer` | Espone il controller nel cluster e pubblica il suo indirizzo negli Ingress |
 
 ```powershell
-kubectl port-forward svc/frontend 8080:80 -n development
+kubectl apply -k kubernetes/ingress/traefik
+kubectl get pods -n traefik
+kubectl get ingressclass
+kubectl get svc -n traefik
 ```
 
-Poi aprire <http://localhost:8080>. Test end-to-end: aggiungere un prodotto al carrello e verificare la conversione di valuta da USD a EUR (attraversa frontend, catalogo, carrello, Redis e servizio valute).
+Atteso: pod `1/1 Running`, IngressClass `traefik` e Service con un `EXTERNAL-IP`.
 
-Evidenze: [`dev-ingress-no-controller.png`](docs/screenshots/tests/dev/dev-ingress-no-controller.png), [`dev-home.png`](docs/screenshots/tests/dev/dev-home.png), [`dev-cart.png`](docs/screenshots/tests/dev/dev-cart.png).
+**Configurazione degli Ingress.** `kubernetes/base/ingress.yaml` usa `ingressClassName: traefik`. Gli overlay aggiungono un host per ambiente (`dev.boutique.localhost`, `prod.boutique.localhost`), perché con un solo controller due Ingress con la stessa regola (percorso `/` senza host) si contenderebbero lo stesso percorso.
+
+```powershell
+kubectl get ingress -A
+```
+
+Ora la colonna `ADDRESS` riporta l'indirizzo del Service di Traefik per entrambi gli ambienti, e nel log di Traefik compaiono le righe `Updated ingress status` (vedi `traefik-logs-primo-avvio.txt`): il controller ha preso in carico gli Ingress.
+
+**Accesso dal PC.** L'indirizzo del `LoadBalancer` appartiene alla rete interna di Docker e non è raggiungibile da Windows, e il Service `frontend` è ClusterIP. Per i test si usa quindi un port-forward verso Traefik, da lasciare aperto in una finestra dedicata:
+
+```powershell
+kubectl port-forward svc/traefik 8082:80 -n traefik
+```
+
+Prova dell'instradamento per host:
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: dev.boutique.localhost" http://localhost:8082/
+curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: prod.boutique.localhost" http://localhost:8082/
+curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: test.boutique.localhost" http://localhost:8082/
+```
+
+Risultato: `200` per dev e prod, `404` per un host senza regola. Nel browser, `http://dev.boutique.localhost:8082/` e `http://prod.boutique.localhost:8082/` aprono i due negozi (i nomi `.localhost` sono risolti in locale, senza modificare il file `hosts`). I port-forward diretti ai Service `frontend` (`8080` per dev, `8081` per prod) restano disponibili per i test che non riguardano l'Ingress.
+
+**Access log.** Traefik scrive un log JSON per richiesta, con host, percorso, stato, router e servizio scelti. Vista compatta:
+
+```powershell
+kubectl logs -n traefik deploy/traefik --tail=10 | Select-String '^\{' | ForEach-Object { $j = $_.Line | ConvertFrom-Json; "{0} {1} -> {2} ({3})" -f $j.RequestHost, $j.RequestPath, $j.DownstreamStatus, $j.RouterName }
+```
+
+Ogni richiesta riporta il router del proprio ambiente (`development-boutique-ingress-...`, `production-boutique-ingress-...`); la richiesta all'host sconosciuto riporta `404` senza router. Log completi: [`traefik-logs-primo-avvio.txt`](docs/log-and-analysis/traefik-logs-primo-avvio.txt) e, dopo la disattivazione del controllo versione, [`traefik-logs.txt`](docs/log-and-analysis/traefik-logs.txt).
+
+**Osservazione sulla latenza.** Il campo `Overhead` del log è nell'ordine delle centinaia di microsecondi (35-501 µs): Traefik non è il collo di bottiglia. La prima richiesta dopo un riavvio è più lenta (2,7 s per dev e 3,7 s per prod, contro circa 36 ms delle successive) e il ritardo è presente anche accedendo direttamente al frontend. Dettagli e ipotesi nella sezione 5.4.
+
+Evidenze ([cartella](docs/screenshots/ingress/)): [Traefik installato](docs/screenshots/ingress/traefik-installato.png), [Ingress con ADDRESS](docs/screenshots/ingress/ingress-address.png), [instradamento per host](docs/screenshots/ingress/curl-host.png), [negozio dev](docs/screenshots/ingress/shop-dev-ingress.png), [negozio prod](docs/screenshots/ingress/shop-prod-ingress.png), [access log](docs/screenshots/ingress/traefik-accesslog.png).
 
 ### 4.6 Ambiente prod
 
@@ -334,6 +382,7 @@ Su 35 richieste alla home (`/`), tutte con stato `200`, la latenza è risultata 
 Le richieste più lente sono ravvicinate e la più lenta è la prima del gruppo: è coerente con l'apertura a freddo delle connessioni verso gli altri servizi(ipotesi, non verificata).
 In una prima esecuzione era stato registrato un massimo di 6871 ms; non è più ricostruibile perché la richiesta è uscita dalla finestra dei log analizzata, quindi la causa non è determinata.
 
+Lo stesso comportamento si osserva sulle prime richieste dei due ambienti passando da Traefik (2,7 s per dev e 3,7 s per prod, contro 36-37 ms delle successive): per la stessa richiesta il frontend dichiara nel proprio log la durata misurata da Traefik (2723 contro 2727 ms), quindi il tempo è speso dentro la gestione della richiesta e non nella rete tra controller e pod. Il ritardo è presente anche accedendo direttamente al frontend, senza Traefik (3,5 s). Non dipende in modo regolare dal tempo di inattività: una prova successiva dopo pochi minuti non lo ha riprodotto (home 233 ms, risorsa statica 44 ms). Causa non determinata; ipotesi: chiamate ai servizi a valle (connessioni gRPC o risoluzione dei nomi).
 Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 10).
 
 Evidenza: 
@@ -787,8 +836,8 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Limite | Impatto | Evoluzione |
 |---|---|---|
 | Cluster locale a nodo singolo (Docker Desktop) | Nessuna alta affidabilità: le 2 repliche del frontend di prod girano sullo stesso nodo | Cluster gestito multi-nodo (es. AKS) con anti-affinity o topology spread |
-| Ingress senza controller **[DA COMPLETARE]** | L'Ingress è accettato ma non instrada traffico; l'accesso avviene solo con port-forward | Installazione di ingress-nginx |
-| Accesso tramite `kubectl port-forward` | Si aggancia a un singolo pod e si interrompe quando il pod viene sostituito (osservato dopo update e restart); adatto solo ai test | Ingress funzionante |
+| Traefik fissato a v3.7.16, controllo aggiornamenti disattivato | Nessuna notifica automatica delle nuove versioni: durante il progetto la v3.7.16 è stata applicata a mano dopo la segnalazione nel log | Aggiornamento periodico controllato (es. Renovate sui manifest) |
+| Accesso tramite `kubectl port-forward` (anche verso Traefik) | L'indirizzo del `LoadBalancer` (`172.18.0.5`) appartiene alla rete interna di Docker e non è raggiungibile da Windows; il port-forward si aggancia a un singolo pod e si interrompe quando il pod viene sostituito (osservato dopo update e restart); adatto solo ai test | Load balancer raggiungibile dall'esterno del cluster (es. cluster gestito) |
 | metrics-server con `--kubelet-insecure-tls` | Verifica dei certificati dei kubelet disattivata (sezione 7, caso 5) | Certificati dei kubelet firmati dalla CA del cluster |
 
 ### 10.2 Sicurezza
@@ -802,6 +851,9 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Traffico gRPC tra i servizi non cifrato | Comunicazioni interne in chiaro | Service mesh con mTLS (es. Istio, Linkerd) |
 | Immagini upstream referenziate per tag, non per digest, e non scansionate | Un tag può essere ripubblicato con contenuto diverso; vulnerabilità delle immagini non note | Riferimento per digest e scansione in pipeline (es. Trivy) |
 | Pod Security Admission non configurato sui namespace | Nessun controllo automatico sui `securityContext` dei pod creati in futuro | Label `pod-security.kubernetes.io` sui namespace (in `warn` prima di `enforce`: i manifest upstream non definiscono `seccompProfile`, richiesto dal profilo `restricted`) |
+| ClusterRole di Traefik con lettura dei Secret di tutti i namespace | È richiesta dal client di Traefik anche senza TLS: se il pod fosse compromesso, potrebbe leggere i Secret dell'intero cluster | Restringere i permessi (da verificare se il provider Ingress funziona senza `secrets`) |
+| Ingress solo HTTP, senza TLS | Il traffico tra client e Ingress è in chiaro | Certificati TLS (es. cert-manager) |
+| `frontend-external` (LoadBalancer) ancora presente | Il frontend è raggiungibile anche senza passare dall'Ingress | Rimuoverlo in produzione, lasciando solo l'Ingress |
 
 ### 10.3 Dati
 
@@ -814,7 +866,7 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Limite | Impatto | Evoluzione |
 |---|---|---|
 | Metrica applicativa ricavata dai log con uno script | Non in tempo reale e limitata alle righe di log disponibili | Prometheus e Grafana **[DA COMPLETARE]**; strumentazione del frontend con OpenTelemetry |
-| Latenza massima di 6871 ms in una prima misurazione | Causa non determinata: la richiesta è uscita dalla finestra dei log | Metriche persistenti che conservino lo storico |
+| Prima richiesta lenta e intermittente (6871 ms nella prima misura; 2,7 s su dev e 3,7 s su prod, anche senza Traefik) | Causa non determinata: il tempo è speso dentro il frontend (overhead di Traefik tra 35 e 501 µs); non dipende in modo regolare dall'inattività | Metriche persistenti e tracing (es. OpenTelemetry) per attribuire il tempo alle chiamate a valle |
 | Riavvio del frontend con `SandboxChanged` (exit code 255) | Causa non verificata; ipotesi: riavvio del runtime locale | Raccolta centralizzata di log ed eventi |
 
 ### 10.5 Automazione e gestione
