@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: boutique-frontend
+  namespace: monitoring
+spec:
+  groups:
+    - name: boutique-frontend
+      rules:
+        - alert: BoutiqueFrontendDown
+          expr: kube_deployment_status_replicas_available{deployment="frontend", namespace=~"development|production"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frontend senza repliche disponibili in {{ $labels.namespace }}"
+            description: "Il Deployment frontend nel namespace {{ $labels.namespace }} non ha pod Ready da almeno 1 minuto: il negozio non risponde. Runbook: docs/runbook.md, sezione 1."

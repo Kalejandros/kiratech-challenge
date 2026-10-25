@@ -1,0 +1,35 @@
+# kube-prometheus-stack 92.13.1 - configurazione per il cluster locale (Docker Desktop)
+# Installazione: README, sezione 5.5
+
+grafana:
+  admin:
+    # Password generata fuori dal repository (Secret grafana-admin)
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+      limits:
+        memory: 1Gi
+    # Considera anche sonde, monitor e regole create fuori dal chart
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+# Componenti del control plane non raggiungibili sul cluster locale:
+# lasciarli attivi produrrebbe target "down" e allarmi falsi
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
