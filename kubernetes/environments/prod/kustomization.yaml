@@ -57,3 +57,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 256Mi
+  - target:
+      kind: Ingress
+      name: boutique-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: prod.boutique.localhost

@@ -11,7 +11,7 @@ Le procedure valgono per entrambi gli ambienti: negli esempi si usa `development
 | Cosa | Valore |
 |---|---|
 | Namespace | `development` (dev), `production` (prod) |
-| Punto d'ingresso | Service `frontend` (ClusterIP :80), accesso di test con port-forward |
+| Punto d'ingresso | Traefik (namespace `traefik`) con Ingress per host: `dev.boutique.localhost`, `prod.boutique.localhost`. Dal PC: `kubectl port-forward svc/traefik 8082:80 -n traefik`. Per test diretti: port-forward al Service `frontend` |
 | Componente stateful | `redis-cart` (dati non persistenti: un riavvio svuota i carrelli) |
 | Secret richiesto | `redis-auth`, chiave `REDIS_PASSWORD`, creato fuori dal repository (README, sezione 8.2) |
 | Accesso di sola lettura | Ruolo `boutique-ops-viewer`: pod, log, eventi, Service, Deployment; esclusi Secret, `exec` e modifiche (README, sezione 8.4) |
@@ -31,6 +31,8 @@ Da eseguire all'apertura di una segnalazione e dopo ogni intervento.
 | 5 | `kubectl top pods -n development` | Consumi sotto i limits | Vicino ai limits di memoria: rischio `OOMKilled` (sezione 2.6) |
 | 6 | Port-forward + `(Invoke-WebRequest http://localhost:8080/_healthz -UseBasicParsing).Content` | `ok` | Il frontend non risponde: sezione 2 |
 | 7 | Nel browser: aggiungere un prodotto al carrello e completare il checkout | Pagina "Your order is complete!" | Errore 500: sezione 2.7 |
+| 8 | `kubectl get ingress -n development` | Classe `traefik`, host `dev.boutique.localhost`, `ADDRESS` valorizzato | Sezione 2.11 |
+| 9 | `curl.exe -s -o NUL -w "%{http_code}" -H "Host: dev.boutique.localhost" http://localhost:8082/` (con il port-forward verso Traefik) | `200` | Sezione 2.11 |
 
 Il passo 6 verifica solo che il processo del frontend sia vivo; il passo 7 verifica l'intera catena di servizi. **Un health check verde non garantisce che l'applicazione funzioni.**
 
@@ -170,6 +172,23 @@ kubectl get pods -n kube-system -l k8s-app=metrics-server
 
 - La risorsa `apiservice` non esiste: metrics-server non è installato (README, sezione 5.4).
 - Esiste con `AVAILABLE False`: metrics-server è installato ma non pronto; controllare i suoi log (caso reale: README, sezione 7, caso 5).
+
+### 2.11 Ingress: `ADDRESS` vuoto o errore `404`
+
+```powershell
+kubectl get ingressclass
+kubectl get ingress -A
+kubectl get pods -n traefik
+kubectl logs -n traefik deploy/traefik --tail=20
+```
+
+| Sintomo | Causa probabile | Verifica |
+|---|---|---|
+| `ADDRESS` vuoto | Nessun controller per la classe indicata (situazione iniziale di questo progetto, classe `nginx` senza controller) | `kubectl get ingressclass`: deve esistere la classe usata in `ingressClassName` |
+| `404` da Traefik | Nessuna regola per l'host richiesto, oppure host sbagliato nella richiesta | Confrontare l'header `Host` con la colonna `HOSTS` di `kubectl get ingress -A`; nell'access log la richiesta non ha `RouterName` |
+| `502` / `503` da Traefik | La regola esiste ma il Service non ha pod pronti | Sezione 1, passo 3 (EndpointSlice) |
+
+L'access log di Traefik (JSON) riporta per ogni richiesta host, percorso, stato, router e pod di destinazione (README, sezione 4.5).
 
 ## 3. Procedure operative
 

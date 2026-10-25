@@ -66,6 +66,8 @@ README, architettura, runbook e valutazione di Krateo sono stati redatti con il 
 | Previsione: compilazione in cache alla seconda build | **Corretto** | L'output della build mostrava la compilazione rifatta, perché `COPY . .` include il Dockerfile modificato |
 | Prova delle variabili d'ambiente documentata con l'immagine `nonroot` ma eseguita con quella originale | **Corretto** | Confronto tra screenshot e testo; prova ripetuta con l'immagine corretta |
 | Patch di sicurezza, pipeline, `configMapGenerator`, Dockerfile `nonroot` | **Accettati dopo verifica** | Rendering, apply, test funzionali, pipeline verde e rossa |
+| Installazione di ingress-nginx proposta come evoluzione dell'Ingress | **Scartato** | Verifica dello stato del progetto prima dell'installazione: ritirato da Kubernetes a marzo 2026; sostituito da Traefik |
+| Immagine di Traefik scritta senza registry (`traefik:v3.7.11`) | **Corretto** | Revisione del manifest: sarebbe stata bloccata dal controllo della pipeline; sostituita con `docker.io/library/traefik:v3.7.16` |
 
 ## 5. Caso principale: le immagini "bloccate dalla rete"
 

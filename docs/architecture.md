@@ -34,8 +34,11 @@ flowchart LR
     U["Utente<br/>(browser)"]
 
     subgraph CL["Cluster Kubernetes (Docker Desktop, nodo singolo)"]
+        subgraph NT["Namespace traefik"]
+            TR["Traefik v3.7.16<br/>Ingress controller"]
+        end
         subgraph NS["Namespace development / production"]
-            ING["Ingress boutique-ingress<br/>classe nginx<br/>(controller non installato)"]
+            ING[/"Ingress boutique-ingress<br/>classe traefik<br/>host dev/prod.boutique.localhost"/]
             SVC["Service frontend<br/>ClusterIP :80"]
             FE["frontend<br/>Go · HTTP :8080"]
             CO["checkoutservice<br/>Go · :5050"]
@@ -53,9 +56,10 @@ flowchart LR
         end
     end
 
-    U -->|"kubectl port-forward<br/>localhost:8080 dev / 8081 prod"| SVC
-    U -.->|"HTTP, non attivo"| ING
-    ING -.-> SVC
+    U -->|"port-forward localhost:8082<br/>Host: dev/prod.boutique.localhost"| TR
+    ING -.->|regole per host| TR
+    TR -->|HTTP| SVC
+    U -.->|"port-forward diretto<br/>8080 dev / 8081 prod (test)"| SVC
     SVC --> FE
 
     FE -->|gRPC| PC
@@ -80,8 +84,7 @@ flowchart LR
     SEC -.->|REDIS_PASSWORD| CART
     CM -.->|FRONTEND_MESSAGE| FE
 ```
-
-Le linee tratteggiate indicano configurazione (Secret, ConfigMap) o percorsi non attivi (Ingress senza controller).
+Le linee tratteggiate indicano configurazione (regole dell'Ingress, Secret, ConfigMap) o l'accesso diretto usato solo per i test. Il port-forward verso Traefik è necessario perché l'indirizzo del Service LoadBalancer di Traefik appartiene alla rete interna di Docker e non è raggiungibile da Windows.
 
 ## 4. Flusso di un ordine
 
@@ -122,7 +125,7 @@ Un guasto di uno qualsiasi di questi servizi fa fallire l'ordine: il checkout è
 | Ruolo | Nella soluzione |
 |---|---|
 | Client / API consumer | Browser e `Invoke-WebRequest`. L'applicazione non espone un'API REST pubblica: il frontend serve pagine HTML |
-| Ingress / Route | Ingress `boutique-ingress` (classe nginx), non attivo per assenza del controller; accesso di test tramite `kubectl port-forward` sul Service `frontend` |
+| Ingress / Route | Ingress `boutique-ingress` con classe `traefik` e un host per ambiente (`dev.boutique.localhost`, `prod.boutique.localhost`), gestito da Traefik nel namespace `traefik`; dal PC si raggiunge Traefik con un port-forward |
 | API service | `frontend`, unico servizio esposto verso l'utente |
 | Worker / componente asincrono | **Assente.** Tutte le chiamate sono sincrone; `emailservice` è l'operazione più vicina a un'elaborazione secondaria, ma viene chiamata in modo sincrono dal checkout. Il `loadgenerator`, unico componente "in background", non è incluso nel deploy |
 | Database / cache / broker | Redis (`redis-cart`) per i carrelli; nessun message broker |
@@ -159,7 +162,7 @@ flowchart TB
 | Identità dei pod | ServiceAccount dedicato per ogni servizio, token non montato (`automountServiceAccountToken: false`) |
 | Permessi | Nessun permesso RBAC all'applicazione; ruolo di sola lettura `boutique-ops-viewer` per il supporto L2 |
 | Container | Non root, capabilities rimosse, filesystem in sola lettura, requests e limits definiti (dai manifest upstream) |
-| Esposizione | Solo tramite il Service `frontend`; il Service LoadBalancer upstream è rimosso |
+| Esposizione | Tramite Ingress (Traefik), con un host per ambiente; il Service LoadBalancer upstream del frontend è rimosso |
 
 Dettagli e verifiche nella sezione 8 del README.
 
@@ -184,12 +187,12 @@ Evoluzione prevista: Prometheus e Grafana **[DA COMPLETARE]**.
 | Immagini ufficiali nel cluster | Immagini costruite in proprio | Riproducibilità e tempi: la build del frontend è dimostrata in locale (sezione 4.7), ma il nodo del cluster non vede le immagini locali e serve un registry |
 | Secret creato a mano | External Secrets, Sealed Secrets | Nessuna dipendenza aggiuntiva in locale; il limite è dichiarato e l'evoluzione indicata |
 | Redis con `emptyDir` | PersistentVolumeClaim, servizio gestito | Configurazione upstream mantenuta: i carrelli sono dati di sessione e la perdita è accettabile in un ambiente dimostrativo |
-| Port-forward | Ingress attivo | Il cluster non ha un ingress controller **[DA COMPLETARE: ingress-nginx]** |
+| Traefik come Ingress controller | ingress-nginx, Gateway API | ingress-nginx è stato ritirato a marzo 2026; Traefik è mantenuto e funziona con le risorse Ingress esistenti, cambiando solo `ingressClassName`. Il Gateway API è l'evoluzione indicata da Kubernetes (sezione 10) |
 | CI di sola validazione | Deploy automatico (CD o GitOps) | Il cluster è locale e non raggiungibile da GitHub; la validazione intercetta gli errori prima dell'apply |
 
 ## 10. Punti di estensione
 
-- **Ingresso:** ingress controller (nginx) e TLS.
+- **Ingresso:** TLS sull'Ingress (es. cert-manager) e migrazione al Gateway API, che Traefik supporta.
 - **Rete:** NetworkPolicy per limitare chi può raggiungere Redis; service mesh per mTLS tra i servizi.
 - **Segreti:** External Secrets Operator con un vault, per esempio Azure Key Vault.
 - **Dati:** Redis persistente o gestito.

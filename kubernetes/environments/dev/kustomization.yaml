@@ -64,3 +64,10 @@ patches:
                 envFrom:
                   - configMapRef:
                       name: frontend-config
+  - target:
+      kind: Ingress
+      name: boutique-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: dev.boutique.localhost

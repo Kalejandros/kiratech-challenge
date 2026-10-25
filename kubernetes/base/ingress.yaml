@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: boutique-ingress
 spec:
-  ingressClassName: nginx
+  ingressClassName: traefik
   rules:
     - http:
         paths:
