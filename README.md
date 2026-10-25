@@ -2,8 +2,6 @@
 
 Questo repository contiene la configurazione Kubernetes (Kustomize) e la documentazione tecnica per il deployment di Google Cloud Online Boutique su un cluster locale (Docker Desktop), con due ambienti logici: `dev` e `prod`.
 
-> Le parti marcate **[DA COMPLETARE]** non sono ancora state eseguite o provate: vanno completate prima della consegna.
-
 ---
 
 ## Indice
@@ -14,6 +12,7 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 4. [Installazione e test](#4-installazione-e-test-ambiente-dev)
    - [Build dell'immagine del frontend](#47-build-dellimmagine-del-frontend)
 5. [Verifica: health check, log, metriche](#5-verifica-health-check-log-metriche)
+   - [Prometheus, Grafana e allarmi](#55-prometheus-grafana-e-allarmi)
 6. [Update, rollout e rollback](#6-update-rollout-e-rollback)
 7. [Troubleshooting: problemi incontrati](#7-troubleshooting-problemi-incontrati)
 8. [Sicurezza e configurazione](#8-sicurezza-e-configurazione)
@@ -38,7 +37,8 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 - patch di sicurezza nella base: password per Redis da un Secret esterno al repository, token dei ServiceAccount disattivato, ServiceAccount dedicato a Redis, rimozione del Service LoadBalancer upstream;
 - risorse aggiunte: Ingress, ruolo RBAC di sola lettura per il supporto operativo;
 - metrics-server per le metriche di risorse, uno script per una metrica applicativa ricavata dai log, una pipeline di validazione dei manifest (sezione 9);
-- Dockerfile del frontend con immagine di base non root e fissata per digest (sezione 4.7).
+- Dockerfile del frontend con immagine di base non root e fissata per digest (sezione 4.7);
+- Ingress controller Traefik con un host per ambiente (sezione 4.5) e monitoraggio con Prometheus, Grafana e un allarme sul frontend (sezione 5.5).
 
 ## 2. Struttura del repository
 
@@ -50,19 +50,24 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 │   ├── base/
 │   │   ├── <servizio>.yaml         Manifest upstream di Online Boutique (invariati)
 │   │   ├── security-rbac.yaml      ServiceAccount di Redis, ruolo di sola lettura per il supporto L2
-│   ├── ingress/
-│   │   └── traefik/                Ingress controller Traefik v3.7.16 (namespace, RBAC, Deployment, Service)│   │   └── kustomization.yaml      Elenco delle risorse e patch di sicurezza
+│   │   ├── ingress.yaml            Ingress (classe traefik; host aggiunto dagli overlay)
+│   │   └── kustomization.yaml      Elenco delle risorse e patch di sicurezza
 │   ├── environments/
 │   │   ├── dev/                    Overlay dev: namespace development, immagini, banner di ambiente
 │   │   └── prod/                   Overlay prod: namespace production, 2 repliche del frontend, limiti di memoria
+│   ├── ingress/
+│   │   └── traefik/                Ingress controller Traefik v3.7.16 (namespace, RBAC, Deployment, Service)
 │   └── monitoring/
-│       └── metrics-server/         metrics-server v0.9.0 + patch per il cluster locale
+│       ├── metrics-server/         metrics-server v0.9.0 + patch per il cluster locale
+│       └── kube-prometheus-stack/  values.yaml del chart Helm e regola di allarme sul frontend
 ├── scripts/
 │   └── frontend-metrics.ps1        Metrica applicativa ricavata dai log del frontend
 ├── src/
 │   └── frontend/                   Codice del frontend (upstream v0.10.5) con Dockerfile modificato
 ├── docs/
 │   ├── architecture.md             Documento architetturale
+│   ├── runbook.md                  Procedure operative
+│   ├── krateo.md                   Valutazione di Krateo
 │   ├── log-and-analysis/           Output completi di log e describe
 │   └── screenshots/                Evidenze, una cartella per argomento
 └── ai-usage/
@@ -77,6 +82,7 @@ Gli overlay non usano `namePrefix` (sezione 7, caso 3): dev e prod sono isolati 
 - **kubectl**, che include Kustomize (`kubectl kustomize`, `kubectl apply -k`).
 - **PowerShell** (testato con Windows PowerShell 5.1): i comandi del README sono scritti per PowerShell.
 - **Accesso di rete in uscita** sulla porta 443 verso `us-central1-docker.pkg.dev` (immagini di Online Boutique) e Docker Hub (`redis:alpine`).
+- **Per il monitoraggio** (sezione 5.5): Helm 4 e accesso a `prometheus-community.github.io`, `quay.io`, `ghcr.io`, `registry.k8s.io` e Docker Hub.
 - **Permessi di amministratore sul cluster**, non sul PC: servono per creare namespace, Secret e risorse RBAC e per le verifiche con `kubectl auth can-i --as`. Docker Desktop li concede di default all'utente locale.
 - **Git** facoltativo: in alternativa si scarica il repository come ZIP da GitHub.
 - **Per la build dell'immagine** (sezione 4.7): accesso a Docker Hub, `gcr.io` e `proxy.golang.org` (dipendenze Go).
@@ -383,10 +389,104 @@ Le richieste più lente sono ravvicinate e la più lenta è la prima del gruppo:
 In una prima esecuzione era stato registrato un massimo di 6871 ms; non è più ricostruibile perché la richiesta è uscita dalla finestra dei log analizzata, quindi la causa non è determinata.
 
 Lo stesso comportamento si osserva sulle prime richieste dei due ambienti passando da Traefik (2,7 s per dev e 3,7 s per prod, contro 36-37 ms delle successive): per la stessa richiesta il frontend dichiara nel proprio log la durata misurata da Traefik (2723 contro 2727 ms), quindi il tempo è speso dentro la gestione della richiesta e non nella rete tra controller e pod. Il ritardo è presente anche accedendo direttamente al frontend, senza Traefik (3,5 s). Non dipende in modo regolare dal tempo di inattività: una prova successiva dopo pochi minuti non lo ha riprodotto (home 233 ms, risorsa statica 44 ms). Causa non determinata; ipotesi: chiamate ai servizi a valle (connessioni gRPC o risoluzione dei nomi).
-Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 10).
+Non è una metrica esposta in tempo reale: per esporla servirebbe strumentare il frontend con le librerie Prometheus (vedi sezione 10). Le metriche in tempo reale di risorse e stato degli oggetti sono raccolte da Prometheus (sezione 5.5).
 
 Evidenza: 
 [`frontend-metrics.png`](docs/screenshots/metriche/frontend-metrics.png), output completo: [`frontend-metrics.txt`](docs/log-and-analysis/frontend-metrics.txt)
+
+### 5.5 Prometheus, Grafana e allarmi
+
+**Componenti.** Il chart [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) installa nel namespace `monitoring`:
+
+| Componente | Ruolo |
+|---|---|
+| kube-state-metrics, node-exporter, kubelet | Producono le metriche: stato degli oggetti Kubernetes, risorse del nodo e dei container |
+| Prometheus | Raccoglie le metriche ogni 30 secondi, le conserva (2 giorni) e valuta le regole di allarme |
+| Grafana | Mostra i grafici interrogando Prometheus; dashboard già incluse nel chart |
+| Alertmanager | Riceve gli allarmi attivi, li raggruppa e li inoltra ai destinatari configurati |
+| Prometheus Operator | Gestisce Prometheus e Alertmanager tramite risorse Kubernetes (es. `PrometheusRule`) |
+
+**Versioni verificate prima dell'installazione:**
+- **Helm 4.2.4**, l'ultima stabile: Helm 3 è a fine vita (correzioni di sicurezza fino al 10 febbraio 2027). Il file scaricato è stato verificato con l'hash SHA256 pubblicato nella release. Helm è installato nella cartella utente, senza permessi di amministratore;
+- **kube-prometheus-stack 92.13.1** (Prometheus Operator v0.94.1), la più recente nell'indice del repository; richiede Kubernetes ≥ 1.25.
+
+**Configurazione** (`kubernetes/monitoring/kube-prometheus-stack/values.yaml`):
+- password di Grafana da un Secret creato fuori dal repository, con lo stesso metodo della password di Redis (sezione 8.2): il chart altrimenti usa una password di default nota;
+- Prometheus con 2 giorni di storico e limiti di memoria adatti a un PC;
+- Prometheus considera anche le regole create fuori dal chart (`ruleSelectorNilUsesHelmValues: false` e simili);
+- etcd, scheduler, controller manager e kube-proxy disattivati: sul cluster locale non espongono metriche raggiungibili e produrrebbero target "down" e allarmi falsi.
+
+**Installazione:**
+
+```powershell
+kubectl create namespace monitoring
+$pw = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+Set-Content -Path "$env:USERPROFILE\grafana-admin-password.txt" -Value $pw -NoNewline -Encoding ascii
+kubectl create secret generic grafana-admin -n monitoring --from-literal=admin-user=admin --from-file=admin-password="$env:USERPROFILE\grafana-admin-password.txt"
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm template monitoring prometheus-community/kube-prometheus-stack --version 92.13.1 -n monitoring -f kubernetes\monitoring\kube-prometheus-stack\values.yaml | Out-File -Encoding utf8 "$env:TEMP\kps-render.yaml"
+helm install monitoring prometheus-community/kube-prometheus-stack --version 92.13.1 -n monitoring -f kubernetes\monitoring\kube-prometheus-stack\values.yaml
+kubectl get pods -n monitoring
+```
+
+Il rendering di prova (`helm template`, l'equivalente di `kubectl kustomize`) genera 108 risorse, tutte con immagini con registry e tag espliciti, e conferma che Grafana legge la password dal Secret `grafana-admin`.
+
+Dopo circa 17 minuti i sei pod risultano `Running`. Il tempo è dovuto ai download, eseguiti dal kubelet uno alla volta: l'immagine di Grafana (464 MB) ha richiesto 11 minuti, mentre quella di Prometheus (114 MB) è stata scaricata in 2 minuti, ma dopo quasi 14 minuti di attesa in coda (`13m42s including waiting`). Il download di Alertmanager si è interrotto ed è stato completato da un tentativo automatico successivo: sezione 7, caso 6.
+
+**Accesso**, ognuno in una finestra dedicata:
+
+```powershell
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+kubectl port-forward svc/monitoring-kube-prometheus-alertmanager 9093:9093 -n monitoring
+Set-Clipboard -Value (Get-Content "$env:USERPROFILE\grafana-admin-password.txt" -Raw).Trim()
+```
+
+Grafana su <http://localhost:3000> (utente `admin`, password dagli appunti, senza mostrarla a schermo), Prometheus su <http://localhost:9090>, Alertmanager su <http://localhost:9093>.
+
+**Cosa mostrano le dashboard** (`Kubernetes / Compute Resources / Namespace (Pods)`):
+- **dev:** i pod usano l'1,74% della CPU richiesta e il 34,5% della memoria richiesta; **prod:** 1,52% e 24,6%, con le due repliche del frontend;
+- 1-5 millicore di CPU per pod: gli stessi valori di `kubectl top` (sezione 5.4), una conferma incrociata tra due strumenti indipendenti;
+- memoria per linguaggio: `adservice` (Java) circa 105 MiB in dev, `cartservice` (C#) 55 MiB, `frontend` (Go) 5,6 MiB;
+- le requests di CPU (100-200 millicore) sono 20-100 volte il consumo senza traffico: un'indicazione per il dimensionamento, da confermare sotto carico prima di modificarle.
+
+**Allarme sul frontend** (`kubernetes/monitoring/kube-prometheus-stack/frontend-alert.yaml`): una `PrometheusRule` versionata nel repository.
+
+```yaml
+- alert: BoutiqueFrontendDown
+  expr: kube_deployment_status_replicas_available{deployment="frontend", namespace=~"development|production"} == 0
+  for: 1m
+  labels:
+    severity: critical
+```
+
+Scatta quando il frontend di uno dei due ambienti non ha repliche disponibili da almeno un minuto. Una replica è disponibile solo se la readiness probe su `/_healthz` passa, quindi l'allarme copre anche pod esistenti ma che non rispondono. La descrizione rimanda al runbook.
+
+```powershell
+kubectl apply -f kubernetes\monitoring\kube-prometheus-stack\frontend-alert.yaml
+```
+
+**Prova:** frontend di dev portato a 0 repliche e poi ripristinato.
+
+```powershell
+kubectl scale deployment/frontend --replicas=0 -n development
+kubectl scale deployment/frontend --replicas=1 -n development
+kubectl rollout status deployment/frontend -n development
+```
+
+| Momento | Stato in Prometheus | Note |
+|---|---|---|
+| Prima della prova | `INACTIVE` | Metrica a 1 in dev e a 2 in prod |
+| Dopo circa 1 minuto | `PENDING` | `namespace="development"`, valore 0; attesa del `for: 1m` |
+| Dopo circa 2 minuti | `FIRING` | Le regole sono valutate ogni 30 secondi: il cambio avviene alla prima valutazione dopo il minuto |
+| In Alertmanager | Allarme ricevuto | Raggruppato per `namespace="development"`, accanto a `Watchdog` (allarme sempre attivo che conferma il funzionamento della catena) |
+| Dopo il ripristino | `INACTIVE` | |
+
+Il destinatario configurato dal chart è `null`: gli allarmi vengono ricevuti e mostrati ma non inviati a nessuno (sezione 10.4). L'ambiente di prod non è stato toccato.
+
+Evidenze ([cartella](docs/screenshots/monitoring/)): [pod di monitoring](docs/screenshots/monitoring/monitoring-pods-running.png), [dashboard dev](docs/screenshots/monitoring/grafana-namespace-dev.png), [dashboard prod](docs/screenshots/monitoring/grafana-namespace-prod.png), [metrica](docs/screenshots/monitoring/prometheus-metrica-frontend.png), [Alertmanager a riposo](docs/screenshots/monitoring/alertmanager-watchdog.png), [pending](docs/screenshots/monitoring/prometheus-alert-pending.png), [firing](docs/screenshots/monitoring/prometheus-alert-firing.png), [Alertmanager](docs/screenshots/monitoring/alertmanager-firing.png), [ripristino](docs/screenshots/monitoring/prometheus-alert-resolved.png). Eventi dell'installazione: [`monitoring-install-events.txt`](docs/log-and-analysis/monitoring-install-events.txt).
 
 ## 6. Update, rollout e rollback
 
@@ -529,6 +629,7 @@ Metodo seguito, dal generale al particolare: `kubectl get pods` (quale component
 | 3 | Errore 500 sul frontend | `namePrefix` rinomina i Service ma non gli indirizzi nelle variabili d'ambiente | Rimosso `namePrefix`, isolamento tramite namespace |
 | 4 | `rollout undo` → `no rollout history found` | `set image` con la stessa immagine non crea una nuova revisione | Nessun errore reale: serve una revisione precedente |
 | 5 | `kubectl top` → Metrics API non disponibile | metrics-server non riesce a verificare il certificato dei kubelet | `--kubelet-insecure-tls`, solo in locale |
+| 6 | Alertmanager in `ImagePullBackOff` | Download interrotto (`short read ... unexpected EOF`) | Nessuna modifica: completato da un tentativo automatico del kubelet |
 
 ### 7.1 Caso 1 — `ImagePullBackOff` su tutti i servizi tranne Redis
 
@@ -640,6 +741,26 @@ kubectl top nodes
 
 Evidenze: [`metrics-server-args.png`](docs/screenshots/troubleshooting/metrics-server-args.png)
 
+### 7.6 Caso 6 — Download interrotto: `unexpected EOF`
+
+**Sintomo:** durante l'installazione di kube-prometheus-stack (sezione 5.5) il pod di Alertmanager restava `1/2 ImagePullBackOff`, mentre gli altri cinque pod erano `Running`.
+
+**Verifica:**
+
+```powershell
+kubectl describe pod alertmanager-monitoring-kube-prometheus-alertmanager-0 -n monitoring | Select-String "Image:|Pulling|Failed|Error|BackOff"
+docker pull quay.io/prometheus/alertmanager:v0.34.1
+```
+
+L'errore era `short read: expected 24590257 bytes but got 2097153: unexpected EOF`, ripetuto due volte: il registry rispondeva e iniziava a inviare un layer di 24,6 MB, ma la connessione si chiudeva dopo circa 2 MB. Dal PC la stessa immagine si scaricava correttamente.
+
+**Causa:** errore di rete durante il trasferimento, non di configurazione. Il messaggio è diverso sia da `pull access denied` (caso 1, nome) sia da `NotFound` (caso 2, tag). L'interruzione sempre allo stesso punto fa pensare a un elemento intermedio (proxy o rete di distribuzione del registry), ma non è stato possibile verificarlo.
+
+**Soluzione:** nessuna modifica. Il kubelet ripete il download con attese crescenti, e un tentativo successivo è andato a buon fine: Alertmanager è passato a `2/2 Running`. Se l'errore fosse persistito, l'alternativa prevista era la stessa immagine da Docker Hub (`docker.io/prom/alertmanager`), configurabile nel `values.yaml`.
+
+**Cosa insegna:** un `ImagePullBackOff` non va risolto alla cieca: il messaggio dell'evento distingue nome, tag e rete. Per un errore di rete transitorio il meccanismo di retry di Kubernetes è spesso sufficiente; il registry alternativo è il piano B se il problema persiste.
+
+Evidenza: [`monitoring-install-events.txt`](docs/log-and-analysis/monitoring-install-events.txt)
 
 ## 8. Sicurezza e configurazione
 
@@ -784,7 +905,7 @@ Il workflow GitHub Actions [`.github/workflows/validate-manifests.yml`](.github/
 
 ### 9.1 Cosa controlla
 
-Per ognuno dei tre target (`kubernetes/environments/dev`, `kubernetes/environments/prod`, `kubernetes/monitoring/metrics-server`), in parallelo:
+Per ognuno dei quattro target (`kubernetes/environments/dev`, `kubernetes/environments/prod`, `kubernetes/monitoring/metrics-server`, `kubernetes/ingress/traefik`), in parallelo:
 
 | Passo | Cosa verifica | Esempio di errore bloccato |
 |---|---|---|
@@ -847,13 +968,12 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Secret `redis-auth` creato a mano con `kubectl` | Non versionato né riproducibile automaticamente: ogni nuovo ambiente richiede il passo manuale, altrimenti `CreateContainerConfigError` (sezione 8.2) | External Secrets Operator con un vault (es. Azure Key Vault) oppure Sealed Secrets |
 | Password di Redis passata come argomento (`--requirepass`) e come variabile d'ambiente | Visibile a chi può eseguire comandi nel container (`exec`), permesso escluso dal ruolo L2 | Password letta da un file montato dal Secret, con configurazione Redis dedicata |
 | Cifratura a riposo dei Secret in etcd non verificata | Nel datastore del cluster i Secret sono codificati in base64, non necessariamente cifrati | Encryption at rest del cluster o KMS del provider |
-| Nessuna NetworkPolicy **[DA COMPLETARE]** | Ogni pod può raggiungere ogni Service del namespace; Redis è protetto solo dalla password | NetworkPolicy che consente l'accesso a Redis solo dal cartservice (da verificare il supporto del CNI di Docker Desktop) |
+| Nessuna NetworkPolicy | Ogni pod può raggiungere ogni Service del namespace; Redis è protetto solo dalla password | NetworkPolicy che consente l'accesso a Redis solo dal cartservice (da verificare il supporto del CNI di Docker Desktop) |
 | Traffico gRPC tra i servizi non cifrato | Comunicazioni interne in chiaro | Service mesh con mTLS (es. Istio, Linkerd) |
 | Immagini upstream referenziate per tag, non per digest, e non scansionate | Un tag può essere ripubblicato con contenuto diverso; vulnerabilità delle immagini non note | Riferimento per digest e scansione in pipeline (es. Trivy) |
 | Pod Security Admission non configurato sui namespace | Nessun controllo automatico sui `securityContext` dei pod creati in futuro | Label `pod-security.kubernetes.io` sui namespace (in `warn` prima di `enforce`: i manifest upstream non definiscono `seccompProfile`, richiesto dal profilo `restricted`) |
 | ClusterRole di Traefik con lettura dei Secret di tutti i namespace | È richiesta dal client di Traefik anche senza TLS: se il pod fosse compromesso, potrebbe leggere i Secret dell'intero cluster | Restringere i permessi (da verificare se il provider Ingress funziona senza `secrets`) |
 | Ingress solo HTTP, senza TLS | Il traffico tra client e Ingress è in chiaro | Certificati TLS (es. cert-manager) |
-| `frontend-external` (LoadBalancer) ancora presente | Il frontend è raggiungibile anche senza passare dall'Ingress | Rimuoverlo in produzione, lasciando solo l'Ingress |
 
 ### 10.3 Dati
 
@@ -865,7 +985,10 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 
 | Limite | Impatto | Evoluzione |
 |---|---|---|
-| Metrica applicativa ricavata dai log con uno script | Non in tempo reale e limitata alle righe di log disponibili | Prometheus e Grafana **[DA COMPLETARE]**; strumentazione del frontend con OpenTelemetry |
+| Metrica di latenza ricavata dai log con uno script | Il frontend non espone metriche HTTP: la latenza non è in Prometheus | Strumentazione del frontend con OpenTelemetry; sonda HTTP su `/_healthz` con blackbox-exporter |
+| Allarme basato sulle repliche disponibili, non su una richiesta HTTP | Un pod `Ready` che restituisce errori applicativi (come nel caso 3) non fa scattare l'allarme | Sonda HTTP sul percorso dell'utente (home, carrello) con blackbox-exporter |
+| Alertmanager senza destinatari (receiver `null`) | Gli allarmi sono visibili nelle interfacce ma non generano notifiche | Receiver email, Teams o sistema di reperibilità |
+| Prometheus senza volume persistente, storico di 2 giorni | Le metriche si perdono al riavvio del pod di Prometheus | Volume persistente e retention adeguata, oppure servizio gestito (es. Azure Monitor managed Prometheus) |
 | Prima richiesta lenta e intermittente (6871 ms nella prima misura; 2,7 s su dev e 3,7 s su prod, anche senza Traefik) | Causa non determinata: il tempo è speso dentro il frontend (overhead di Traefik tra 35 e 501 µs); non dipende in modo regolare dall'inattività | Metriche persistenti e tracing (es. OpenTelemetry) per attribuire il tempo alle chiamate a valle |
 | Riavvio del frontend con `SandboxChanged` (exit code 255) | Causa non verificata; ipotesi: riavvio del runtime locale | Raccolta centralizzata di log ed eventi |
 
@@ -877,6 +1000,7 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | Deploy con `kubectl apply` manuale | Nessuna rimozione automatica delle risorse tolte dai file (sezione 8.7) | Argo CD o Flux con prune |
 | Pipeline solo di validazione | Non verifica l'esistenza dei tag né il funzionamento dell'applicazione (sezione 9.5) | Deploy di prova su kind nella pipeline |
 | Immagine del frontend costruita solo in locale | Il cluster continua a usare l'immagine ufficiale: il nodo non vede le immagini locali (sezione 4.7) | Build e pubblicazione su un registry (es. GitHub Container Registry) dalla pipeline |
+| `values.yaml` e regola di allarme non validati dalla pipeline | Un errore nel `values.yaml` o nella `PrometheusRule` emergerebbe solo all'installazione | `helm template` e kubeconform (con gli schemi delle CRD) nella pipeline |
 | `kubectl diff` non disponibile nell'ambiente di test | Verifica pre-apply fatta sul rendering di `kubectl kustomize` (sezione 6.5) | `diff` nel PATH (es. Git for Windows) |
 | History dei rollout senza `CHANGE-CAUSE` | Revisioni poco leggibili | Annotazione `kubernetes.io/change-cause` |
 
