@@ -68,6 +68,7 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 │   ├── architecture.md             Documento architetturale
 │   ├── runbook.md                  Procedure operative
 │   ├── krateo.md                   Valutazione di Krateo
+│   ├── demo.md                     Demo end-to-end
 │   ├── log-and-analysis/           Output completi di log e describe
 │   └── screenshots/                Evidenze, una cartella per argomento
 └── ai-usage/
@@ -1019,3 +1020,4 @@ Limiti consapevoli della soluzione, con impatto e possibile evoluzione. Molti de
 | [`docs/krateo.md`](docs/krateo.md) | Valutazione di Krateo: golden path, parametri, YAML concettuale, benefici, rischi e raccomandazione |
 | [`ai-usage/ai-usage.md`](ai-usage/ai-usage.md) | Strumenti AI usati, casi concreti, output accettati e scartati, verifiche |
 | [`docs/log-and-analysis/`](docs/log-and-analysis/) | Output completi di `kubectl logs` e `kubectl describe` citati nel README |
+| [`docs/demo.md`](docs/demo.md) | Demo end-to-end: gli 11 punti della traccia con comandi, risultati attesi ed evidenze di riserva |
