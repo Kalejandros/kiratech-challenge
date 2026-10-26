@@ -13,6 +13,7 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
    - [Build dell'immagine del frontend](#47-build-dellimmagine-del-frontend)
 5. [Verifica: health check, log, metriche](#5-verifica-health-check-log-metriche)
    - [Prometheus, Grafana e allarmi](#55-prometheus-grafana-e-allarmi)
+   - [Smoke test](#56-smoke-test)
 6. [Update, rollout e rollback](#6-update-rollout-e-rollback)
 7. [Troubleshooting: problemi incontrati](#7-troubleshooting-problemi-incontrati)
 8. [Sicurezza e configurazione](#8-sicurezza-e-configurazione)
@@ -61,7 +62,8 @@ Questo repository contiene la configurazione Kubernetes (Kustomize) e la documen
 │       ├── metrics-server/         metrics-server v0.9.0 + patch per il cluster locale
 │       └── kube-prometheus-stack/  values.yaml del chart Helm e regola di allarme sul frontend
 ├── scripts/
-│   └── frontend-metrics.ps1        Metrica applicativa ricavata dai log del frontend
+│   ├── frontend-metrics.ps1        Metrica applicativa ricavata dai log del frontend
+│   └── smoke-test.ps1              Verifica rapida di pod ed endpoint di dev e prod
 ├── src/
 │   └── frontend/                   Codice del frontend (upstream v0.10.5) con Dockerfile modificato
 ├── docs/
@@ -488,6 +490,20 @@ kubectl rollout status deployment/frontend -n development
 Il destinatario configurato dal chart è `null`: gli allarmi vengono ricevuti e mostrati ma non inviati a nessuno (sezione 10.4). L'ambiente di prod non è stato toccato.
 
 Evidenze ([cartella](docs/screenshots/monitoring/)): [pod di monitoring](docs/screenshots/monitoring/monitoring-pods-running.png), [dashboard dev](docs/screenshots/monitoring/grafana-namespace-dev.png), [dashboard prod](docs/screenshots/monitoring/grafana-namespace-prod.png), [metrica](docs/screenshots/monitoring/prometheus-metrica-frontend.png), [Alertmanager a riposo](docs/screenshots/monitoring/alertmanager-watchdog.png), [pending](docs/screenshots/monitoring/prometheus-alert-pending.png), [firing](docs/screenshots/monitoring/prometheus-alert-firing.png), [Alertmanager](docs/screenshots/monitoring/alertmanager-firing.png), [ripristino](docs/screenshots/monitoring/prometheus-alert-resolved.png). Eventi dell'installazione: [`monitoring-install-events.txt`](docs/log-and-analysis/monitoring-install-events.txt).
+
+### 5.6 Smoke test
+
+Lo script [`smoke-test.ps1`](scripts/smoke-test.ps1) verifica in pochi secondi, dopo un'installazione o un intervento, che la soluzione risponda: pod pronti in `development` e `production`, home dei due ambienti raggiungibile tramite l'Ingress, risposta `404` per un host senza regola (prova dell'instradamento per nome) e health check del frontend. Richiede il port-forward verso Traefik.
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+
+Risultato: `6/6 controlli superati`. Se un controllo fallisce, lo script lo segnala con `[KO]` e termina con codice di uscita 1, quindi può essere usato anche in automazione. Se Traefik non è raggiungibile, lo script si ferma con un messaggio esplicito invece di riportare errori su tutti gli endpoint.
+
+È un test superficiale: verifica che il sistema risponda, non che tutte le funzioni siano corrette (per esempio non esegue un checkout).
+
+Evidenze: [`smoke-test-ok.png`](docs/screenshots/tests/smoke-test-ok.png), [`smoke-test-ko.png`](docs/screenshots/tests/smoke-test-ko.png).
 
 ## 6. Update, rollout e rollback
 
