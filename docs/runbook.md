@@ -35,6 +35,7 @@ Da eseguire all'apertura di una segnalazione e dopo ogni intervento.
 | 9 | `curl.exe -s -o NUL -w "%{http_code}" -H "Host: dev.boutique.localhost" http://localhost:8082/` (con il port-forward verso Traefik) | `200` | Sezione 2.11 |
 | 10 | Prometheus <http://localhost:9090/alerts> o Alertmanager <http://localhost:9093> (port-forward: README, sezione 5.5) | Solo `Watchdog` attivo | Un allarme `BoutiqueFrontendDown` indica in quale namespace il frontend non ha repliche: sezioni 2.1-2.5 |
 
+I passi 1, 6 e 9 si possono eseguire in un solo comando con `scripts/smoke-test.ps1` (README, sezione 5.6), con il port-forward verso Traefik attivo.
 Il passo 6 verifica solo che il processo del frontend sia vivo; il passo 7 verifica l'intera catena di servizi. **Un health check verde non garantisce che l'applicazione funzioni.**
 
 Port-forward per i passi 6 e 7, in una finestra dedicata:
