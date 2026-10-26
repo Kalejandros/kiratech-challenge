@@ -101,13 +101,14 @@ Piano B: [`ingress-address.png`](screenshots/ingress/ingress-address.png), [`dev
 ## 5. Invocare gli endpoint applicativi principali (4 min)
 
 ```powershell
+.\scripts\smoke-test.ps1
 curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: dev.boutique.localhost" http://localhost:8082/
 curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: prod.boutique.localhost" http://localhost:8082/
 curl.exe -s -o NUL -w "%{http_code}`n" -H "Host: test.boutique.localhost" http://localhost:8082/
 curl.exe -s -H "Host: dev.boutique.localhost" http://localhost:8082/_healthz
 ```
 
-Atteso: `200`, `200`, `404` (host senza regola), `ok`.
+Atteso: smoke test `6/6`; poi `200`, `200`, `404` (host senza regola), `ok`.
 
 Nel browser: home di dev (con il banner) e di prod (senza), aggiunta di un prodotto al carrello, cambio di valuta, checkout fino a "Your order is complete!". Il checkout attraversa frontend, checkout, carrello, Redis, catalogo, valute, spedizione, pagamento ed email.
 
@@ -229,6 +230,7 @@ Piano B: [`describe-pull-access-denied.png`](screenshots/troubleshooting/describ
 ```powershell
 kubectl get pods -n development
 kubectl kustomize kubernetes/environments/dev | Select-String "frontend:v"
+.\scripts\smoke-test.ps1
 ```
 
-Atteso: 11 pod `1/1 Running` e frontend su `v0.10.5`: ambiente lasciato come all'inizio.
+Atteso: 11 pod `1/1 Running`, frontend su `v0.10.5` e smoke test `6/6`: ambiente lasciato come all'inizio.
