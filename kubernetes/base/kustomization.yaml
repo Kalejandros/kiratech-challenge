@@ -82,3 +82,32 @@ patches:
                 key: REDIS_PASSWORD
           - name: REDIS_ADDR
             value: "redis-cart:6379,password=$(REDIS_PASSWORD)"
+
+  # Avvio lento dei servizi Python: con 200m di CPU il caricamento delle librerie
+  # richiede 15-20 secondi, oltre la finestra della liveness probe (circa 15 s),
+  # e dopo un riavvio dell'ambiente i pod entravano in CrashLoopBackOff.
+  # La startupProbe concede fino a 2 minuti solo all'avvio; liveness e readiness
+  # restano invariate e partono dopo.
+  - target:
+      kind: Deployment
+      name: emailservice
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/startupProbe
+        value:
+          grpc:
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 24
+
+  - target:
+      kind: Deployment
+      name: recommendationservice
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/startupProbe
+        value:
+          grpc:
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 24
