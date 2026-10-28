@@ -850,7 +850,7 @@ Il deploy è accettato senza errori, ma `redis-cart` e `cartservice` restano `0/
 
 Creato il Secret, gli stessi pod (stesso nome, `RESTARTS 0`) sono passati a `Running` senza redeploy: il kubelet riprova finché la configurazione non è disponibile. Per questo la creazione del Secret è un passo dell'installazione (sezioni 4.3 e 4.6).
 
-Evidenze: [`secret-mancante.png`](docs/screenshots/troubleshooting/secret-mancante.png), [`secret-mancante-risolto.png`](docs/screenshots/troubleshooting/secret-mancante-risolto.png)
+Evidenze: [`secret-describe.png`](docs/screenshots/security/secret-describe.png), [`secret-mancante.png`](docs/screenshots/security/secret-mancante.png), [`secret-mancante-risolto.png`](docs/screenshots/security/secret-mancante-risolto.png)
 
 ### 8.3 Token del ServiceAccount disattivato
 
