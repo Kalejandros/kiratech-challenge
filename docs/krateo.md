@@ -132,6 +132,39 @@ spec:
 
 Il core-provider installa il chart con questi valori e lo mantiene allineato: una modifica della risorsa (per esempio `imageTag`) produce un aggiornamento, la cancellazione rimuove l'istanza.
 
+### 6.1 Oltre i componenti Kubernetes
+
+Un chart registrato in Krateo può contenere qualsiasi risorsa Kubernetes, comprese le risorse personalizzate di altri operatori. Questo permette alla stessa composition di orchestrare anche componenti esterni al cluster. Proposta concettuale per Online Boutique, da verificare sulla versione di Krateo adottata:
+
+| Componente | Oggi | Con Krateo |
+|---|---|---|
+| Componenti Kubernetes (Deployment, Service, Ingress, RBAC) | Manifest gestiti con Kustomize | Template del chart, installati e riconciliati dal core-provider |
+| Database / cache (Redis) | Redis nel cluster con `emptyDir` | Un parametro sceglie tra Redis nel cluster (dev) e un servizio gestito (prod, es. Azure Cache for Redis), creato tramite l'operatore del cloud provider referenziato dal chart; la stringa di connessione arriva come Secret, senza passare dal form |
+| Repository e pipeline | Repository e workflow creati a mano | Un blueprint di scaffolding crea il repository del team da un template, già con la pipeline di validazione, tramite un provider GitHub di Krateo (generato da specifica OpenAPI) |
+| Rilascio continuo | `kubectl apply` manuale | La composition crea anche l'applicazione Argo CD che sincronizza il repository del team |
+| Servizi esterni | — | RESTAction che interrogano API esterne (stato della pipeline, ticketing, costi) e ne mostrano i dati nel portale accanto all'istanza |
+
+Parametri aggiuntivi nello schema:
+
+```json
+{
+  "redis": {
+    "type": "object",
+    "properties": {
+      "mode": { "type": "string", "enum": ["inCluster", "managed"], "default": "inCluster" }
+    }
+  },
+  "gitops": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean", "default": false }
+    }
+  }
+}
+```
+
+Rischi specifici: per creare risorse cloud o repository, la piattaforma deve avere credenziali verso il cloud provider e verso GitHub, quindi diventa un punto sensibile da proteggere (permessi minimi, segreti gestiti con un vault, audit). Ogni operatore o provider aggiunto è un componente in più da aggiornare e monitorare, e un errore nel template ora può creare o modificare risorse a pagamento, non solo oggetti nel cluster.
+
 ## 7. Diagramma di integrazione
 
 ```mermaid

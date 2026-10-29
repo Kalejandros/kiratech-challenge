@@ -2,8 +2,6 @@
 
 Sequenza della demo richiesta dalla traccia (sezione 7), con comandi e risultati attesi. I comandi sono per PowerShell e si eseguono dalla radice del repository, una riga alla volta. Per ogni punto è indicata un'evidenza già presente nel repository, da usare se un passaggio non si può eseguire dal vivo.
 
-Durata indicativa: 35-40 minuti.
-
 ## Preparazione (prima della demo)
 
 Cluster acceso e ambienti già installati (README, sezioni 4 e 5.5). In una finestra PowerShell:
@@ -41,7 +39,7 @@ Set-Clipboard -Value (Get-Content "$env:USERPROFILE\grafana-admin-password.txt" 
 
 Editor aperto su `kubernetes/environments/dev/kustomization.yaml` (punti 7-9).
 
-## 1. Clonare il repository e spiegare la struttura (3 min)
+## 1. Clonare il repository e spiegare la struttura
 
 ```powershell
 git clone https://github.com/Kalejandros/kiratech-challenge.git
@@ -51,7 +49,7 @@ tree kubernetes
 
 Da mostrare: `base` (manifest upstream invariati + patch), `environments/dev` e `prod` (solo le differenze), `ingress/traefik`, `monitoring`; poi `src/frontend`, `scripts/`, `docs/` e `ai-usage/`. Struttura completa: README, sezione 2.
 
-## 2. Build dell'immagine applicativa (3 min)
+## 2. Build dell'immagine applicativa
 
 ```powershell
 docker build -t boutique-frontend:v0.10.5-nonroot src\frontend
@@ -64,7 +62,7 @@ Atteso: build completata (pochi secondi se gli strati sono in cache: righe `CACH
 
 Piano B: [`run-nonroot.png`](screenshots/build/run-nonroot.png), [`run-senza-env.png`](screenshots/build/run-senza-env.png).
 
-## 3. Installare la soluzione su Kubernetes (4 min)
+## 3. Installare la soluzione su Kubernetes
 
 Prerequisiti (namespace e Secret creati fuori dal repository):
 
@@ -89,7 +87,7 @@ Atteso: immagini con registry e tag `v0.10.5` (Redis `redis:alpine`); dry-run se
 
 Piano B: [`prod-apply.png`](screenshots/tests/prod/prod-apply.png), [`traefik-installato.png`](screenshots/ingress/traefik-installato.png).
 
-## 4. Verificare pod, service, ingress e configurazioni (4 min)
+## 4. Verificare pod, service, ingress e configurazioni
 
 ```powershell
 kubectl get pods -n development
@@ -107,7 +105,7 @@ Atteso: 11 pod `1/1 Running` in dev e 12 in prod (2 repliche del frontend); Serv
 
 Piano B: [`ingress-address.png`](screenshots/ingress/ingress-address.png), [`dev-get-pods.png`](screenshots/tests/dev/dev-get-pods.png).
 
-## 5. Invocare gli endpoint applicativi principali (4 min)
+## 5. Invocare gli endpoint applicativi principali
 
 ```powershell
 .\scripts\smoke-test.ps1
@@ -129,7 +127,7 @@ Atteso: la riga `A request to send order confirmation email ... has been receive
 
 Piano B: [`curl-host.png`](screenshots/ingress/curl-host.png), [`prod-checkout.png`](screenshots/tests/prod/prod-checkout.png).
 
-## 6. Health check, readiness, log e metriche (5 min)
+## 6. Health check, readiness, log e metriche
 
 ```powershell
 kubectl describe pod -n development -l app=frontend | Select-String "Liveness|Readiness"
@@ -144,7 +142,7 @@ In Grafana: dashboard `Kubernetes / Compute Resources / Namespace (Pods)`, names
 
 Piano B: [`grafana-namespace-dev.png`](screenshots/monitoring/grafana-namespace-dev.png), [`frontend-metrics.png`](screenshots/metriche/frontend-metrics.png).
 
-## 7. Aggiornamento applicativo e rollout (3 min)
+## 7. Aggiornamento applicativo e rollout
 
 Nel file `kubernetes/environments/dev/kustomization.yaml`, nel blocco `images:` **del solo frontend**, cambiare `newTag: v0.10.5` in `newTag: v0.10.4`. Poi:
 
@@ -160,7 +158,7 @@ Atteso: solo il frontend passa a `v0.10.4`; `deployment.apps/frontend configured
 
 Piano B: [`update-v0104.png`](screenshots/update-rollback/update-v0104.png).
 
-## 8. Failure scenario e troubleshooting (5 min)
+## 8. Failure scenario e troubleshooting
 
 Nello stesso file, `newTag: v0.10.4` → `newTag: v0.10.99` (tag inesistente). Poi:
 
@@ -176,7 +174,7 @@ Atteso: `rollout status` in timeout; un pod nuovo `0/1 ErrImagePull` o `ImagePul
 
 Piano B: [`guasto-describe-notfound.png`](screenshots/update-rollback/guasto-describe-notfound.png), [`guasto-servizio-disponibile.png`](screenshots/update-rollback/guasto-servizio-disponibile.png).
 
-## 9. Rollback (4 min)
+## 9. Rollback
 
 Rollback di emergenza:
 
@@ -199,7 +197,7 @@ kubectl rollout status deployment/frontend -n development
 
 Atteso: dev di nuovo su `v0.10.5`, allineato al repository e a prod.
 
-Facoltativo, per mostrare l'allarme (circa 3 minuti di attesa):
+Facoltativo, per mostrare l'allarme:
 
 ```powershell
 kubectl scale deployment/frontend --replicas=0 -n development
@@ -210,11 +208,11 @@ Tra i due comandi: in Prometheus la regola passa da `PENDING` a `FIRING` e l'all
 
 Piano B: [`rollback-undo.png`](screenshots/update-rollback/rollback-undo.png), [`prometheus-alert-firing.png`](screenshots/monitoring/prometheus-alert-firing.png).
 
-## 10. Valutazione Krateo (4 min)
+## 10. Valutazione Krateo
 
 Documento: [`krateo.md`](krateo.md). Punti da presentare: il golden path "Ambiente Online Boutique" e cosa diventa template (sezione 3); i parametri esposti al team consumer (sezione 4); il prerequisito della conversione in chart Helm (sezione 5); YAML concettuale e componenti esterni al cluster (sezione 6); il diagramma (sezione 7); la distinzione tra blueprint, PoC e adozione (sezione 8); la raccomandazione: non subito, prima chart Helm e PoC, poi pilota con più team (sezione 10).
 
-## 11. Esempio concreto di utilizzo dell'AI (4 min)
+## 11. Esempio concreto di utilizzo dell'AI
 
 Caso: le immagini "bloccate dalla rete" ([`ai-usage.md`](../ai-usage/ai-usage.md), sezione 5).
 

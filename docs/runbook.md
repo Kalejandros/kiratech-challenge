@@ -82,7 +82,7 @@ kubectl get secret,configmap -n development
 
 Messaggio tipico: `Error: secret "redis-auth" not found`. Creare l'oggetto mancante (README, sezione 4.3): i pod partono da soli, senza redeploy, perché il kubelet riprova. Caso reale: README, sezione 8.2.
 
-### 2.3 `CrashLoopBackOff` — *non osservato in questo progetto*
+### 2.3 `CrashLoopBackOff`
 
 Il container parte e termina subito; Kubernetes lo riavvia con attese crescenti.
 
